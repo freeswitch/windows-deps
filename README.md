@@ -1,0 +1,199 @@
+# windows-deps
+
+One repository that builds the **Windows dependency packages
+[FreeSWITCH](https://github.com/signalwire/freeswitch) consumes** (zlib, OpenSSL,
+…), publishes each of them as a GitHub Release, and — because it knows which
+dependency is built on which — rebuilds **only the part of the graph a change
+touches**, in the right order, handing freshly built packages down the chain.
+
+It is the successor of the per-library `*-packaging` repositories
+(`openssl-packaging`, `zlib-packaging`, …). The package layout is unchanged, so
+FreeSWITCH's `w32\*.props` only need a new download base and a build number.
+
+## Layout
+
+```
+deps.json                       the manifest: every dependency, its version, its source tarball, what it depends on
+deps.lock                       where LOCAL builds take dependency packages from (CI uses the plan instead)
+deps/<name>/build.ps1           how to build + package <name> (one script per dependency)
+deps/<name>/prereqs.ps1         optional: tools to install on a GitHub runner before building <name>
+deps/<name>/freeswitch/w32/     reference MSBuild props for consuming the package in FreeSWITCH
+scripts/common.ps1              shared helpers (toolchain, downloads, dependency packages, zips, checksums, BOM)
+scripts/plan.ps1                decides what to (re)build, in which order, with which build numbers
+scripts/build.ps1               builds one dependency: resolves version/build/dependency packages, runs deps/<name>/build.ps1
+docker/Dockerfile               one Windows-container toolchain image for all dependencies
+.github/workflows/build.yml     plan -> one job per dependency (graph-ordered) -> publish releases
+.github/workflows/build-dep.yml the reusable per-dependency job
+```
+
+## The manifest
+
+```json
+{
+  "repository": "freeswitch/windows-deps",
+  "deps": {
+    "zlib":    { "version": "1.3.2", "source": "https://github.com/madler/zlib/releases/download/v{version}/zlib-{version}.tar.gz",         "deps": [] },
+    "openssl": { "version": "3.4.7", "source": "https://github.com/openssl/openssl/releases/download/openssl-{version}/openssl-{version}.tar.gz", "deps": ["zlib"] }
+  }
+}
+```
+
+`deps` is the dependency graph (`openssl` needs `zlib`, so it is built after zlib
+and against zlib's package). The graph must be acyclic; `scripts/plan.ps1`
+validates it.
+
+## Packages, versions and build numbers
+
+Every dependency is published as a GitHub Release of this repository:
+
+| | |
+|---|---|
+| Release tag | `<name>-v<version>_<build>`, e.g. `openssl-v3.4.7_2` |
+| Package name | `<name>-<version>_<build>`, e.g. `openssl-3.4.7_2` — the zip prefix **and** the top-level folder inside every zip |
+| Assets | `<pkg>-headers.zip`, `<pkg>-binaries-<platform>-<config>.zip` (x64 × Release/Debug by default), `SHA256SUMS.txt`, `<pkg>-BOM.txt` |
+
+`<version>` is the upstream version from `deps.json`. `<build>` is the package
+build number, the same idea as the `<lib>BuildNumber` FreeSWITCH already uses for
+curl, libpq or libks: it separates *packages* of one upstream version. It is
+**never written in the manifest**; `plan.ps1` derives it from the tags that
+already exist: the next build of `openssl` `3.4.7` is `max(N in openssl-v3.4.7_N)
++ 1`, starting at 1. A build number goes up whenever a package is rebuilt:
+
+- the dependency's own directory or version changed;
+- a dependency it depends on (transitively) was rebuilt — e.g. bumping zlib
+  produces `openssl-v3.4.7_<n+1>` although OpenSSL itself did not change;
+- something shared changed (`scripts/`, `docker/`, the workflows): every
+  package is rebuilt;
+- a manual rebuild was requested.
+
+The build number is part of the folder name inside the zips (unlike the old
+CDN packages, where the folder was `curl-7.88.0` for every build). FreeSWITCH's
+download task skips a package whose folder already exists under `libs\`, so this
+is what makes a rebuilt package actually get picked up.
+
+The `*-BOM.txt` asset records the source tarball and the exact dependency
+packages (name + tag) a package was built against.
+
+## How a change becomes builds
+
+1. **plan** (`scripts/plan.ps1`, runs on every push to the default branch that
+   touches `deps.json`, `deps/`, `scripts/`, `docker/` or the workflows):
+   diffs the push, maps changed files to nodes (`deps/<name>/…` → `<name>`;
+   `deps.json` → nodes whose version/source/deps changed; anything shared →
+   all), adds nodes that have never been released for their current version,
+   expands the set to all transitive dependents, sorts it topologically and
+   assigns tags. Output: `plan.json` (also a workflow artifact).
+2. **one job per node** (`build.yml`): `needs` mirrors the graph edges, so
+   `openssl` runs after `zlib`; each job is gated on the plan and skipped when
+   its node is not affected (`!cancelled()` lets a job run when its upstream
+   was *skipped*, but not when it *failed*). A job downloads the packages of
+   dependencies built earlier in the same run (workflow artifacts) and takes
+   the rest from their GitHub Releases, then runs `scripts/build.ps1 -Dep <name>
+   -Plan plan.json -LocalPackages pkgs` and uploads `pkg-<name>`.
+3. **publish**: one Release per affected node with the planned tag, only if
+   every affected build succeeded, so the set of releases is consistent.
+
+Examples: a commit touching only `deps/openssl/` rebuilds `openssl` (one job).
+Bumping zlib in `deps.json` rebuilds `zlib`, then `openssl` against the new zlib
+package from the same run. Editing `scripts/common.ps1` rebuilds everything.
+
+Manual runs (*Actions → Build dependencies → Run workflow*) take a list of
+nodes (or `all`) whose dependents are rebuilt too, and a `publish` switch;
+without it they only produce workflow artifacts.
+
+Runs on one ref are serialized (`concurrency`), so two pushes cannot compute the
+same build number.
+
+## Building locally
+
+### With Docker (Windows containers)
+
+The image holds the toolchain only (VS 2022 Build Tools, Perl, NASM, CMake); the
+repository is mounted, so script edits need no image rebuild:
+
+```powershell
+docker build -t windows-deps docker
+
+docker run --rm --cpus 8 --memory 8g -v ${PWD}:C:\src windows-deps -Dep zlib
+docker run --rm --cpus 8 --memory 8g -v ${PWD}:C:\src windows-deps -Dep openssl
+```
+
+Output: `.\artifacts\<dep>\`. cmd.exe: replace `${PWD}` with `%cd%`.
+
+### Natively
+
+With Visual Studio 2022+ (C++ workload), CMake, and — for OpenSSL — Strawberry
+Perl and NASM:
+
+```powershell
+.\scripts\build.ps1 -Dep zlib
+.\scripts\build.ps1 -Dep openssl
+```
+
+Local builds have no plan: the version comes from `deps.json`, the build number
+from `BUILD_NUMBER` (default `0`, i.e. `zlib-1.3.2_0`, clearly not a release),
+and dependency packages from the environment or `deps.lock`. To build openssl
+against a zlib you just built locally:
+
+```powershell
+$env:ZLIB_PKG_BASE = "$PWD\artifacts\zlib"   # directory (or URL) holding the zips
+$env:ZLIB_PKG      = 'zlib-1.3.2_0'          # package name inside it
+.\scripts\build.ps1 -Dep openssl
+```
+
+### Environment knobs
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CONFIGS` | `Release Debug` | Configurations to build (space-separated). |
+| `PLATFORMS` | `x64` | `x64` and/or `Win32`. |
+| `OUT_DIR` | `<repo>\artifacts\<dep>` | Where zips, logs, checksums and BOM are written. |
+| `BUILD_ROOT` | `C:\wd\<dep>` | Build tree (kept short: OpenSSL and nmake break past MAX_PATH). |
+| `BUILD_NUMBER`, `PKG_NAME` | `0`, `<dep>-<ver>_<build>` | Set by the plan in CI. |
+| `<DEP>_VERSION`, `<DEP>_URL` | from `deps.json` | Override a dependency's version / source tarball. |
+| `<DEP>_PKG_BASE`, `<DEP>_PKG` | from plan / `deps.lock` | Where to take a dependency's package from (URL or directory) and its name. |
+| OpenSSL: `ZLIB_MODE` | `zlib-dynamic` | `zlib-dynamic` (load `zlib.dll` at run time), `zlib` (link `zlibstatic.lib`), `none`. |
+| OpenSSL: `OPENSSLDIR`, `EXTRA_CONFIG` | `C:/Program Files/FreeSWITCH/ssl`, `no-autoload-config` | Passed to `Configure`. |
+| zlib: `EXTRA_CMAKE` | *(empty)* | Extra CMake configure arguments. |
+
+`<DEP>` is the dependency name upper-cased with `-` → `_` (`RABBITMQ_C_PKG_BASE`).
+
+## Adding a dependency
+
+1. Add a node to `deps.json` with its version, source URL template and `deps`.
+2. Write `deps/<name>/build.ps1`: dot-source `scripts/common.ps1`, call
+   `Get-BuildSettings '<name>'` and `Initialize-Toolchain`, fetch dependency
+   packages with `Get-DepPackageRoot`, build inside `Invoke-BuildBatch`, stage
+   files under `<pkg>/…`, zip with `New-PackageZip`, finish with
+   `Write-Checksums`, `Write-Bom`, `Write-PackageSummary`. `deps/zlib` (CMake) and
+   `deps/openssl` (nmake) are the two templates.
+3. If the build needs tools a GitHub windows runner lacks, add
+   `deps/<name>/prereqs.ps1` (and the same tools to `docker/Dockerfile`).
+4. Add a job to `.github/workflows/build.yml` with `needs` listing `plan` plus
+   the node's dependencies, copying the `if` pattern of the existing jobs, and
+   add the node to the `publish` job's `needs`.
+5. Add the reference props under `deps/<name>/freeswitch/w32/`.
+
+## Consuming in FreeSWITCH
+
+Each `deps/<name>/freeswitch/w32/` holds drop-in replacements for the
+corresponding files in FreeSWITCH's `w32\`. They download from
+`https://github.com/freeswitch/windows-deps/releases/download/<name>-v<ver>_<build>/`
+into `libs\<name>-<ver>_<build>\`, and expose the version and build number as
+`<name>Version` / `<name>BuildNumber` in `<name>-version.props`. Bumping a
+package in FreeSWITCH is a change to those two values.
+
+Notes carried over from the individual builders:
+
+- **zlib 1.3.2 renamed its Windows outputs** (`z.dll`, `z.lib`, `zs.lib`);
+  `deps/zlib/build.ps1` restores `zlib.dll` / `zlib.lib` / `zlibstatic.lib`
+  (Debug: `zlibd…`) at link time via an injected CMake include, because the DLL
+  name is baked into the import library.
+- **OpenSSL loads zlib dynamically**: `--with-zlib-lib=zlib` (Debug: `zlibd`)
+  is the DLL base name libcrypto `DSO_load()`s, i.e. exactly the DLL
+  `zlib.props` deploys per configuration. Consumers link nothing extra. With
+  the DLL absent, `COMP_zlib()` returns `NULL` and TLS treats compression as
+  unavailable (OpenSSL 3.4's `cms -compress` crashes in that case: an upstream
+  bug in `cms_cd.c`, not a packaging issue).
+- **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
+  were.

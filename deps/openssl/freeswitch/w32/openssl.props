@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="openssl-version.props" Condition=" '$(opensslVersionImported)' == '' "/>
+    <Import Project="downloadpackage.task" Condition=" '$(downloadpackagetask_Imported)' == '' " />
+  </ImportGroup>
+
+  <PropertyGroup Label="UserMacros">
+    <!-- Package name = zip prefix = folder inside the zips (see zlib.props for why
+         the build number is part of it). -->
+    <OpenSSLPkg>openssl-$(opensslVersion)_$(opensslBuildNumber)</OpenSSLPkg>
+    <OpenSSLDir>$(BaseDir)libs\$(OpenSSLPkg)</OpenSSLDir>
+    <!-- The per-architecture configuration.h lives in include_x64 / include_x86. -->
+    <OpenSSLArchInclude>include_x64</OpenSSLArchInclude>
+    <OpenSSLArchInclude Condition="'$(Platform)'=='Win32'">include_x86</OpenSSLArchInclude>
+    <!-- GitHub Release assets of freeswitch/windows-deps (tag openssl-v<version>_<build>). -->
+    <OpenSSLPkgBase>https://github.com/freeswitch/windows-deps/releases/download/openssl-v$(opensslVersion)_$(opensslBuildNumber)</OpenSSLPkgBase>
+  </PropertyGroup>
+
+  <!--
+       Download Targets. By design, targets run only once per project.
+
+       package:               URI of the zip to fetch
+       expectfileordirectory: skips download+extraction if this already exists
+       outputfolder:          where to store the download ("$(BaseDir)libs" if empty)
+       outputfilename:        overrides the filename from the URI if set
+       extractto:             folder to extract the archive into
+   -->
+
+  <Target Name="opensslBinariesDownloadTarget" BeforeTargets="CustomBuild;PreBuildEvent;Build" DependsOnTargets="7za">
+    <DownloadPackageTask
+        package="$(OpenSSLPkgBase)/$(OpenSSLPkg)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
+        expectfileordirectory="$(OpenSSLDir)\binaries\$(Platform)\$(Configuration)\libcrypto.lib"
+        outputfolder=""
+        outputfilename=""
+        extractto="$(BaseDir)libs\"
+    />
+  </Target>
+  <Target Name="opensslHeadersDownloadTarget" BeforeTargets="CustomBuild;PreBuildEvent;Build" DependsOnTargets="opensslBinariesDownloadTarget">
+    <DownloadPackageTask
+        package="$(OpenSSLPkgBase)/$(OpenSSLPkg)-headers.zip"
+        expectfileordirectory="$(OpenSSLDir)\include\openssl\ssl.h"
+        outputfolder=""
+        outputfilename=""
+        extractto="$(BaseDir)libs\"
+    />
+  </Target>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <!-- include/ holds the common headers; include_x64/ holds the per-arch
+           configuration.h (pulled in by <openssl/opensslconf.h>). -->
+      <AdditionalIncludeDirectories>$(OpenSSLDir)\include;$(OpenSSLDir)\$(OpenSSLArchInclude);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(OpenSSLDir)\binaries\$(Platform)\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <!-- OpenSSL's static libs, plus the Win32 system libs they depend on.
+           zlib: the packages are built with zlib-dynamic, so libcrypto has no
+           link-time zlib dependency; it loads zlib.dll (zlibd.dll in Debug) at
+           run time, which w32\zlib.props already copies next to freeswitch.exe.
+           If the packages are ever built with ZLIB_MODE=zlib (static), add
+           zlibstatic.lib / zlibstaticd.lib from the zlib package here. -->
+      <AdditionalDependencies>libssl.lib;libcrypto.lib;crypt32.lib;ws2_32.lib;advapi32.lib;user32.lib;gdi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

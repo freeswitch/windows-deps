@@ -1,0 +1,12 @@
+# This repository targets Windows. Keep CRLF line endings on checkout.
+* text=auto eol=crlf
+
+# Scripts are invoked as files by CI/Docker; CRLF is fine for both PowerShell editions.
+*.ps1   text eol=crlf
+
+# Anything binary that might land here stays untouched.
+*.zip   binary
+*.lib   binary
+*.dll   binary
+*.pdb   binary
+*.exe   binary

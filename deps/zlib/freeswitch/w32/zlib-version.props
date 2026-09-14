@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="basedir.props" Condition=" '$(BaseDirImported)' == ''"/>
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros">
+    <!-- Release tag in freeswitch/windows-deps: zlib-v$(zlibVersion)_$(zlibBuildNumber) -->
+    <zlibVersion>1.3.2</zlibVersion>
+    <zlibBuildNumber>1</zlibBuildNumber>
+  </PropertyGroup>
+  <PropertyGroup>
+    <zlibVersionImported>true</zlibVersionImported>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="zlibVersion">
+      <Value>$(zlibVersion)</Value>
+    </BuildMacro>
+    <BuildMacro Include="zlibBuildNumber">
+      <Value>$(zlibBuildNumber)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

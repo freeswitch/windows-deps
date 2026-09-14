@@ -1,0 +1,77 @@
+name: Build one dependency
+
+# Reusable job used by build.yml for every node of deps.json: takes the plan
+# produced by scripts/plan.ps1, fetches the packages of dependencies that were
+# built earlier in the same run, builds the requested dependency with
+# scripts/build.ps1 and uploads its zips as the workflow artifact `pkg-<dep>`.
+
+on:
+  workflow_call:
+    inputs:
+      dep:
+        description: 'Dependency to build (key in deps.json)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: ${{ inputs.dep }}
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get the plan
+        uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: .
+
+      # Only fetch run artifacts when the plan says a dependency of this node was
+      # (re)built in this run; otherwise its package comes from a GitHub Release.
+      - name: Check which upstream packages come from this run
+        id: up
+        shell: pwsh
+        run: |
+          $p = Get-Content -Raw plan.json | ConvertFrom-Json
+          $n = $p.nodes.'${{ inputs.dep }}'
+          $run = @($n.deps.PSObject.Properties | Where-Object { $_.Value.source -eq 'run' } | ForEach-Object { $_.Name })
+          "need=$([int]($run.Count -gt 0))" >> $env:GITHUB_OUTPUT
+          Write-Host "packages taken from this run: $(if ($run) { $run -join ', ' } else { '(none)' })"
+
+      - name: Get packages built earlier in this run
+        if: steps.up.outputs.need == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pkg-*
+          path: pkgs
+
+      - name: Install prerequisites
+        shell: pwsh
+        run: |
+          $s = "deps/${{ inputs.dep }}/prereqs.ps1"
+          if (Test-Path $s) { & $s } else { Write-Host "no prerequisites script for ${{ inputs.dep }}" }
+
+      - name: Build + package
+        shell: pwsh
+        env:
+          BUILD_ROOT: C:\wd\${{ inputs.dep }}
+          OUT_DIR: ${{ github.workspace }}\artifacts\${{ inputs.dep }}
+        run: ./scripts/build.ps1 -Dep ${{ inputs.dep }} -Plan plan.json -LocalPackages pkgs
+
+      - name: List artifacts
+        shell: pwsh
+        run: Get-ChildItem 'artifacts/${{ inputs.dep }}' | Format-Table Name, Length
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ inputs.dep }}
+          path: |
+            artifacts/${{ inputs.dep }}/*.zip
+            artifacts/${{ inputs.dep }}/SHA256SUMS.txt
+            artifacts/${{ inputs.dep }}/*-BOM.txt
+            artifacts/${{ inputs.dep }}/*.log
+          if-no-files-found: error
+          retention-days: 30

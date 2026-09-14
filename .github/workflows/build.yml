@@ -1,0 +1,126 @@
+name: Build dependencies
+
+# Builds the Windows dependency packages FreeSWITCH consumes, but only the part of
+# the dependency graph a change touches:
+#
+#   plan     scripts/plan.ps1 reads deps.json + git (diff and tags), expands the
+#            changed nodes to their transitive dependents, assigns build numbers.
+#   <node>   one job per node of deps.json (below); `needs` mirrors the graph
+#            edges, `if` gates each job on the plan. A dependent takes packages
+#            built earlier in the same run as artifacts, everything else from
+#            GitHub Releases.
+#   publish  on push to the default branch (or dispatch with publish=true):
+#            one GitHub Release per rebuilt node, tag <node>-v<version>_<build>.
+#
+# Adding a node to deps.json = adding a job below with the matching `needs`.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - deps.json
+      - 'deps/**'
+      - 'scripts/**'
+      - 'docker/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+    inputs:
+      deps:
+        description: 'Dependencies to rebuild: comma-separated names, or "all". Their dependents are rebuilt too.'
+        required: true
+        default: all
+      publish:
+        description: 'Publish the rebuilt packages as GitHub Releases'
+        type: boolean
+        default: false
+
+# Build numbers are derived from existing tags at plan time; serialize runs per
+# ref so two pushes cannot compute the same number.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      affected: ${{ steps.plan.outputs.affected }}
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - name: Checkout (full history + tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Plan
+        id: plan
+        shell: pwsh
+        run: |
+          $a = @('-OutFile', 'plan.json', '-GitHubOutput')
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $sel = '${{ inputs.deps }}'.Trim()
+            if ($sel -eq 'all') { $a += '-All' }
+            else { $a += '-Changed'; $a += @($sel -split '\s*,\s*' | Where-Object { $_ }) }
+          } else {
+            $a += @('-BaseRef', '${{ github.event.before }}', '-HeadRef', '${{ github.sha }}')
+          }
+          ./scripts/plan.ps1 @a
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan
+          path: plan.json
+
+  # ---- one job per node of deps.json --------------------------------------------
+  # `!cancelled()` keeps a job runnable when an upstream job was merely skipped
+  # (not affected by this change); the explicit result checks stop the chain when
+  # an upstream build actually failed.
+
+  zlib:
+    needs: [plan]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.affected), 'zlib') }}
+    uses: ./.github/workflows/build-dep.yml
+    with:
+      dep: zlib
+
+  openssl:
+    needs: [plan, zlib]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.affected), 'openssl') && needs.zlib.result != 'failure' && needs.zlib.result != 'cancelled' }}
+    uses: ./.github/workflows/build-dep.yml
+    with:
+      dep: openssl
+
+  # ---- publish ------------------------------------------------------------------
+  publish:
+    needs: [plan, zlib, openssl]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.affected != '[]' && (github.event_name == 'push' || inputs.publish) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # create tags + releases
+    strategy:
+      fail-fast: false
+      matrix:
+        dep: ${{ fromJSON(needs.plan.outputs.affected) }}
+    steps:
+      - name: Get package
+        uses: actions/download-artifact@v4
+        with:
+          name: pkg-${{ matrix.dep }}
+          path: pkg
+
+      - name: Release ${{ fromJSON(needs.plan.outputs.plan).nodes[matrix.dep].tag }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ fromJSON(needs.plan.outputs.plan).nodes[matrix.dep].tag }}
+          name: ${{ fromJSON(needs.plan.outputs.plan).nodes[matrix.dep].tag }}
+          target_commitish: ${{ github.sha }}
+          make_latest: false
+          fail_on_unmatched_files: true
+          body: |
+            ${{ matrix.dep }} ${{ fromJSON(needs.plan.outputs.plan).nodes[matrix.dep].version }}, build ${{ fromJSON(needs.plan.outputs.plan).nodes[matrix.dep].build }}, from ${{ github.sha }}.
+            The `*-BOM.txt` asset lists the exact dependency packages this was built against.
+          files: |
+            pkg/*.zip
+            pkg/SHA256SUMS.txt
+            pkg/*-BOM.txt

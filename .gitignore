@@ -1,0 +1,20 @@
+# Build outputs (scripts/build.ps1 writes artifacts/<dep>/ by default)
+/artifacts/
+*.zip
+SHA256SUMS.txt
+*-BOM.txt
+build-*.log
+plan.json
+
+# Local build trees (BUILD_ROOT) if someone points them into the repo
+/wd/
+/zb/
+/ob/
+*.tar.gz
+
+# Downloaded dependency packages used by local builds
+/pkgs/
+
+# OS / editor cruft
+Thumbs.db
+.DS_Store
