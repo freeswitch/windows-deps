@@ -37,15 +37,16 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "libks":   { "version": "2.0.11", "source": "https://github.com/signalwire/libks/archive/refs/tags/v{version}.tar.gz",                  "deps": ["openssl"] },
     "signalwire-client-c": { "version": "2.0.5", "source": "https://github.com/signalwire/signalwire-c/archive/refs/tags/v{version}.tar.gz", "deps": ["libks", "openssl"] },
     "curl":    { "version": "7.88.1", "source": "https://github.com/curl/curl/releases/download/curl-{version_}/curl-{version}.tar.gz",       "deps": ["zlib", "openssl"] },
-    "libpcap": { "version": "1.10.7", "source": "https://github.com/the-tcpdump-group/libpcap/archive/refs/tags/libpcap-{version}.tar.gz",  "deps": [] }
+    "libpcap": { "version": "1.10.7", "source": "https://github.com/the-tcpdump-group/libpcap/archive/refs/tags/libpcap-{version}.tar.gz",  "deps": [] },
+    "rabbitmq-c": { "version": "0.17.0", "source": "https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v{version}.tar.gz",             "deps": ["openssl"] }
   }
 }
 ```
 
-`deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`
-needs `openssl`, `signalwire-client-c` needs `libks` and `openssl`, `curl` needs
-`zlib` and `openssl`, `libpcap` stands alone, so each is built after its
-dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
+`deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
+`rabbitmq-c` need `openssl`, `signalwire-client-c` needs `libks` and `openssl`,
+`curl` needs `zlib` and `openssl`, `libpcap` stands alone, so each is built
+after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
 version and `{version_}` to the version with dots replaced by underscores
@@ -251,6 +252,18 @@ Notes carried over from the individual builders:
   UCRT hide `strdup` & co.); the script passes that via `CMAKE_C_FLAGS` instead
   of patching. flex/bison are winflexbison, fetched at build time
   (`WINFLEX_VERSION`, default 2.5.25).
+- **rabbitmq-c is the static `librabbitmq.4.lib`** with SSL support (the `4` is
+  rabbitmq-c's SOVERSION; the build fails loudly if upstream ever changes it,
+  because `rabbitmq-c.props` links that name). Only `mod_amqp` uses it. The
+  package carries the deprecated top-level shims (`amqp.h`, `amqp_tcp_socket.h`,
+  …) that `mod_amqp` includes as well as `rabbitmq-c/*.h` and the generated
+  `rabbitmq-c/export.h`. The packaged `rabbitmq-c.props` now defines
+  `AMQP_STATIC` (without it the API is declared `dllimport` and linking the
+  static library only works with LNK4217 warnings, which is how the old
+  packages were consumed) and imports `openssl.props`, since the static library
+  references OpenSSL. 0.17.0 was chosen over FreeSWITCH's current 0.15.0 because
+  0.16.0 and 0.17.0 are security releases; every `amqp_*` function `mod_amqp`
+  calls is still present.
 - **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which

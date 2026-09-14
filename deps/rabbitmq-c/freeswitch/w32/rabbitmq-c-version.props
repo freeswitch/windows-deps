@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="basedir.props" Condition=" '$(BaseDirImported)' == ''"/>
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros">
+    <!-- Release tag in freeswitch/windows-deps: rabbitmq-c-v$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber) -->
+    <rabbitmq_cMajorVersion>0</rabbitmq_cMajorVersion>
+    <rabbitmq_cMinorVersion>17</rabbitmq_cMinorVersion>
+    <rabbitmq_cRevisionVersion>0</rabbitmq_cRevisionVersion>
+    <rabbitmq_cVersion>$(rabbitmq_cMajorVersion).$(rabbitmq_cMinorVersion).$(rabbitmq_cRevisionVersion)</rabbitmq_cVersion>
+    <rabbitmq_cBuildNumber>1</rabbitmq_cBuildNumber>
+  </PropertyGroup>
+  <PropertyGroup>
+    <rabbitmq_cVersionImported>true</rabbitmq_cVersionImported>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="rabbitmq_cVersion">
+      <Value>$(rabbitmq_cVersion)</Value>
+    </BuildMacro>
+    <BuildMacro Include="rabbitmq_cBuildNumber">
+      <Value>$(rabbitmq_cBuildNumber)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

@@ -130,11 +130,18 @@ jobs:
     with:
       dep: libpcap
 
+  rabbitmq-c:
+    needs: [plan, openssl]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(needs.plan.outputs.affected, '"rabbitmq-c"') && needs.openssl.result != 'failure' && needs.openssl.result != 'cancelled' }}
+    uses: ./.github/workflows/build-dep.yml
+    with:
+      dep: rabbitmq-c
+
   # ---- publish ------------------------------------------------------------------
   # The `if` must rule out an empty/'[]' affected list BEFORE the matrix below is
   # expanded: GitHub evaluates `if` first, then `strategy`.
   publish:
-    needs: [plan, zlib, openssl, libpng, libks, signalwire-client-c, curl, libpcap]
+    needs: [plan, zlib, openssl, libpng, libks, signalwire-client-c, curl, libpcap, rabbitmq-c]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.affected != '' && needs.plan.outputs.affected != '[]' && (github.event_name == 'push' || inputs.publish) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     permissions:

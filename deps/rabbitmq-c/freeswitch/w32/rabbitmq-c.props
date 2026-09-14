@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="rabbitmq-c-version.props" Condition=" '$(rabbitmq_cVersionImported)' == '' "/>
+    <Import Project="downloadpackage.task" Condition=" '$(downloadpackagetask_Imported)' == '' " />
+    <!-- librabbitmq.4.lib is a STATIC library built with SSL support: it references
+         OpenSSL, so the consumer links the OpenSSL package too. -->
+    <Import Project="openssl.props" Condition=" '$(OpensslPropsImported)' == '' "/>
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros">
+    <!-- Package name = zip prefix = folder inside the zips (build number included so a
+         rebuilt package lands in a new folder and gets picked up). -->
+    <rabbitmq_cPkg>rabbitmq-c-$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber)</rabbitmq_cPkg>
+    <rabbitmq_c_libDir>$(BaseDir)libs\$(rabbitmq_cPkg)</rabbitmq_c_libDir>
+    <rabbitmq_cBinDir>$(rabbitmq_c_libDir)\binaries\$(Platform)\$(Configuration)</rabbitmq_cBinDir>
+    <!-- GitHub Release assets of freeswitch/windows-deps (tag rabbitmq-c-v<version>_<build>). -->
+    <rabbitmq_cPkgBase>https://github.com/freeswitch/windows-deps/releases/download/rabbitmq-c-v$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber)</rabbitmq_cPkgBase>
+  </PropertyGroup>
+  <Target Name="rabbitmq-c-binariesTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(rabbitmq_cPkgBase)/$(rabbitmq_cPkg)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
+           expectfileordirectory="$(rabbitmq_cBinDir)\librabbitmq.4.lib"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs"
+      />
+  </Target>
+  <Target Name="rabbitmq-c-headersTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(rabbitmq_cPkgBase)/$(rabbitmq_cPkg)-headers.zip"
+           expectfileordirectory="$(rabbitmq_c_libDir)\include\amqp.h"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs"
+      />
+  </Target>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(rabbitmq_c_libDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- AMQP_STATIC: the package is the static library; without it rabbitmq-c's
+           export.h declares the API dllimport and the link only succeeds with
+           LNK4217 "locally defined symbol imported" warnings. -->
+      <PreprocessorDefinitions>AMQP_STATIC;AMQP_MAJOR_VERSION=$(rabbitmq_cMajorVersion);AMQP_MINOR_VERSION=$(rabbitmq_cMinorVersion);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(rabbitmq_cBinDir)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>librabbitmq.4.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

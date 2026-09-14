@@ -35,6 +35,11 @@
       "version": "1.10.7",
       "source": "https://github.com/the-tcpdump-group/libpcap/archive/refs/tags/libpcap-{version}.tar.gz",
       "deps": []
+    },
+    "rabbitmq-c": {
+      "version": "0.17.0",
+      "source": "https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v{version}.tar.gz",
+      "deps": ["openssl"]
     }
   }
 }
