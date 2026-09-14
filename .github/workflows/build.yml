@@ -77,47 +77,51 @@ jobs:
   # ---- one job per node of deps.json --------------------------------------------
   # `!cancelled()` keeps a job runnable when an upstream job was merely skipped
   # (not affected by this change); the explicit result checks stop the chain when
-  # an upstream build actually failed.
+  # an upstream build actually failed. Membership is tested on the JSON text of
+  # `affected` (e.g. ["zlib","openssl"]) with the quotes included, so it is exact
+  # and never breaks on an empty output the way fromJSON('') would.
 
   zlib:
     needs: [plan]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.affected), 'zlib') }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(needs.plan.outputs.affected, '"zlib"') }}
     uses: ./.github/workflows/build-dep.yml
     with:
       dep: zlib
 
   openssl:
     needs: [plan, zlib]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.affected), 'openssl') && needs.zlib.result != 'failure' && needs.zlib.result != 'cancelled' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(needs.plan.outputs.affected, '"openssl"') && needs.zlib.result != 'failure' && needs.zlib.result != 'cancelled' }}
     uses: ./.github/workflows/build-dep.yml
     with:
       dep: openssl
 
   libpng:
     needs: [plan, zlib]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.affected), 'libpng') && needs.zlib.result != 'failure' && needs.zlib.result != 'cancelled' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(needs.plan.outputs.affected, '"libpng"') && needs.zlib.result != 'failure' && needs.zlib.result != 'cancelled' }}
     uses: ./.github/workflows/build-dep.yml
     with:
       dep: libpng
 
   libks:
     needs: [plan, openssl]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.affected), 'libks') && needs.openssl.result != 'failure' && needs.openssl.result != 'cancelled' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(needs.plan.outputs.affected, '"libks"') && needs.openssl.result != 'failure' && needs.openssl.result != 'cancelled' }}
     uses: ./.github/workflows/build-dep.yml
     with:
       dep: libks
 
   signalwire-client-c:
     needs: [plan, libks, openssl]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.affected), 'signalwire-client-c') && needs.libks.result != 'failure' && needs.libks.result != 'cancelled' && needs.openssl.result != 'failure' && needs.openssl.result != 'cancelled' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(needs.plan.outputs.affected, '"signalwire-client-c"') && needs.libks.result != 'failure' && needs.libks.result != 'cancelled' && needs.openssl.result != 'failure' && needs.openssl.result != 'cancelled' }}
     uses: ./.github/workflows/build-dep.yml
     with:
       dep: signalwire-client-c
 
   # ---- publish ------------------------------------------------------------------
+  # The `if` must rule out an empty/'[]' affected list BEFORE the matrix below is
+  # expanded: GitHub evaluates `if` first, then `strategy`.
   publish:
     needs: [plan, zlib, openssl, libpng, libks, signalwire-client-c]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.affected != '[]' && (github.event_name == 'push' || inputs.publish) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.affected != '' && needs.plan.outputs.affected != '[]' && (github.event_name == 'push' || inputs.publish) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write      # create tags + releases

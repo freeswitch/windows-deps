@@ -186,8 +186,11 @@ $plan = [ordered]@{
     order      = @($order)
     nodes      = $nodes
 }
-$json = $plan | ConvertTo-Json -Depth 10
-$compact = $plan | ConvertTo-Json -Depth 10 -Compress
+# -InputObject, not the pipeline: piping an array unrolls it, so an empty
+# `affected` would serialize to nothing and a single node to a bare string.
+$json          = ConvertTo-Json -InputObject $plan -Depth 10
+$compact       = ConvertTo-Json -InputObject $plan -Depth 10 -Compress
+$affectedJson  = ConvertTo-Json -InputObject @($affected) -Compress
 
 Write-Host "plan: affected = [$($affected -join ', ')]"
 foreach ($n in $order) {
@@ -199,6 +202,6 @@ foreach ($n in $order) {
 
 if ($OutFile) { [System.IO.File]::WriteAllText($OutFile, $json + "`n", (New-Object System.Text.UTF8Encoding($false))) }
 if ($GitHubOutput -and $env:GITHUB_OUTPUT) {
-    Add-Content -Path $env:GITHUB_OUTPUT -Value ("affected=" + (@($affected) | ConvertTo-Json -Compress))
+    Add-Content -Path $env:GITHUB_OUTPUT -Value ("affected=" + $affectedJson)
     Add-Content -Path $env:GITHUB_OUTPUT -Value ("plan=" + $compact)
 }
