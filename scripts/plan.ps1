@@ -6,7 +6,12 @@
     A node is rebuilt when:
       - its own version in deps.json changed, or files under deps/<name>/ changed
         (between -BaseRef and -HeadRef), or it is listed in -Changed, or -All;
-      - something shared changed (scripts/, docker/, the workflow): then everything;
+      - something that goes into every package changed (scripts/common.ps1,
+        scripts/build.ps1, docker/): then everything -- unless the head commit
+        message scopes it with "[deps: a,b]" (only those nodes, plus their
+        dependents as usual), "[deps: none]" (the shared change rebuilds nothing
+        by itself) or "[deps: all]". Changes to scripts/plan.ps1, the workflows
+        and docs never trigger rebuilds: they do not alter package contents;
       - it has never been released for its current version (no matching tag);
       - any node it depends on (transitively) is rebuilt.
 
@@ -86,6 +91,7 @@ if ($BaseRef -and -not $everything) {
     } else {
         $files = @(& git -C $RepoRoot diff --name-only $BaseRef $HeadRef)
         if ($LASTEXITCODE -ne 0) { throw "git diff $BaseRef $HeadRef failed." }
+        $sharedChanged = @()
         foreach ($f in $files) {
             $f = $f -replace '\\', '/'
             if ($f -match '^deps/([^/]+)/') {
@@ -101,11 +107,31 @@ if ($BaseRef -and -not $everything) {
                     if ([string]$op.Value.source  -ne [string]$manifest.deps.$n.source)  { [void]$changedSet.Add($n) }
                     if ((@($op.Value.deps) -join ',') -ne (@($manifest.deps.$n.deps) -join ',')) { [void]$changedSet.Add($n) }
                 }
-            } elseif ($f -match '^(scripts/|docker/|\.github/workflows/)') {
-                $everything = $true
+            } elseif ($f -match '^(scripts/common\.ps1|scripts/build\.ps1|docker/)') {
+                # Goes into every package: rebuild everything unless the commit scopes it.
+                $sharedChanged += $f
             }
+            # scripts/plan.ps1, .github/workflows/, README etc.: no effect on package contents.
         }
         Write-Host ("plan: {0} changed file(s) between {1} and {2}" -f $files.Count, $BaseRef, $HeadRef)
+
+        if ($sharedChanged.Count -gt 0) {
+            # "[deps: a,b]" / "[deps: none]" / "[deps: all]" in the head commit message
+            # scopes the effect of a shared-file change (e.g. a helper added for one node).
+            $msg = (& git -C $RepoRoot log -1 --format=%B $HeadRef 2>$null) -join "`n"
+            $scope = $null
+            if ($msg -match '\[deps:\s*([^\]]*)\]') { $scope = $Matches[1].Trim() }
+            if ($null -eq $scope -or $scope -eq 'all') {
+                Write-Host ("plan: shared file(s) changed ({0}) -> rebuilding everything (scope with '[deps: a,b]' or '[deps: none]' in the commit message)" -f ($sharedChanged -join ', '))
+                $everything = $true
+            } elseif ($scope -eq 'none') {
+                Write-Host ("plan: shared file(s) changed ({0}) but commit says [deps: none] -> no rebuild for that" -f ($sharedChanged -join ', '))
+            } else {
+                $scoped = @($scope -split '\s*,\s*' | Where-Object { $_ })
+                foreach ($c in $scoped) { if ($c -notin $names) { throw "[deps: ...] in the commit message names unknown node '$c'." } ; [void]$changedSet.Add($c) }
+                Write-Host ("plan: shared file(s) changed ({0}), commit scopes it to [{1}]" -f ($sharedChanged -join ', '), ($scoped -join ', '))
+            }
+        }
     }
 }
 if ($everything) { foreach ($n in $names) { [void]$changedSet.Add($n) } }

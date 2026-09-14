@@ -67,8 +67,12 @@ already exist: the next build of `openssl` `3.4.7` is `max(N in openssl-v3.4.7_N
 - the dependency's own directory or version changed;
 - a dependency it depends on (transitively) was rebuilt — e.g. bumping zlib
   produces `openssl-v3.4.7_<n+1>` although OpenSSL itself did not change;
-- something shared changed (`scripts/`, `docker/`, the workflows): every
-  package is rebuilt;
+- something that goes into every package changed (`scripts/common.ps1`,
+  `scripts/build.ps1`, `docker/`): every package is rebuilt — unless the commit
+  message scopes it: `[deps: libks,signalwire-client-c]` rebuilds only those
+  nodes (plus their dependents, as always), `[deps: none]` says the shared
+  change does not affect any package, `[deps: all]` is the default. Changes to
+  `scripts/plan.ps1`, the workflows or docs never trigger rebuilds;
 - a manual rebuild was requested.
 
 The build number is part of the folder name inside the zips (unlike the old
@@ -84,8 +88,9 @@ packages (name + tag) a package was built against.
 1. **plan** (`scripts/plan.ps1`, runs on every push to the default branch that
    touches `deps.json`, `deps/`, `scripts/`, `docker/` or the workflows):
    diffs the push, maps changed files to nodes (`deps/<name>/…` → `<name>`;
-   `deps.json` → nodes whose version/source/deps changed; anything shared →
-   all), adds nodes that have never been released for their current version,
+   `deps.json` → nodes whose version/source/deps changed; `scripts/common.ps1`,
+   `scripts/build.ps1`, `docker/` → all, or what `[deps: …]` in the commit
+   message says), adds nodes that have never been released for their current version,
    expands the set to all transitive dependents, sorts it topologically and
    assigns tags. Output: `plan.json` (also a workflow artifact).
 2. **one job per node** (`build.yml`): `needs` mirrors the graph edges, so
