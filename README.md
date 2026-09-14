@@ -33,14 +33,19 @@ docker/Dockerfile               one Windows-container toolchain image for all de
   "deps": {
     "zlib":    { "version": "1.3.2",  "source": "https://github.com/madler/zlib/releases/download/v{version}/zlib-{version}.tar.gz",         "deps": [] },
     "openssl": { "version": "3.4.7",  "source": "https://github.com/openssl/openssl/releases/download/openssl-{version}/openssl-{version}.tar.gz", "deps": ["zlib"] },
-    "libpng":  { "version": "1.6.58", "source": "https://github.com/pnggroup/libpng/archive/refs/tags/v{version}.tar.gz",                   "deps": ["zlib"] }
+    "libpng":  { "version": "1.6.58", "source": "https://github.com/pnggroup/libpng/archive/refs/tags/v{version}.tar.gz",                   "deps": ["zlib"] },
+    "libks":   { "version": "2.0.11", "source": "https://github.com/signalwire/libks/archive/refs/tags/v{version}.tar.gz",                  "deps": ["openssl"] },
+    "signalwire-client-c": { "version": "2.0.5", "source": "https://github.com/signalwire/signalwire-c/archive/refs/tags/v{version}.tar.gz", "deps": ["libks", "openssl"] }
   }
 }
 ```
 
-`deps` is the dependency graph (`openssl` and `libpng` need `zlib`, so they are
-built after zlib and against zlib's package). The graph must be acyclic;
-`scripts/plan.ps1` validates it.
+`deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`
+needs `openssl`, `signalwire-client-c` needs `libks` and `openssl`, so each is
+built after its dependencies and against their packages. The graph must be
+acyclic; `scripts/plan.ps1` validates it. Node names are the package names
+FreeSWITCH already uses (`signalwire-client-c`, not the repository name
+`signalwire-c`).
 
 ## Packages, versions and build numbers
 
@@ -201,6 +206,21 @@ Notes carried over from the individual builders:
   the DLL absent, `COMP_zlib()` returns `NULL` and TLS treats compression as
   unavailable (OpenSSL 3.4's `cms -compress` crashes in that case: an upstream
   bug in `cms_cd.c`, not a packaging issue).
+- **libks and signalwire-client-c** are built the way their own `win\` wrappers
+  did it (CMake, target `ks2` / `signalwire_client2` only), minus the Visual
+  Studio generator and minus the OpenSSL download from `files.freeswitch.org`.
+  `Get-OpenSSLRootForCMake` (in `scripts/common.ps1`) assembles a conventional
+  `include\` + `lib\` root from the openssl package so `FindOpenSSL` finds it
+  via `OPENSSL_ROOT_DIR`; OpenSSL is linked statically into `ks2.dll`.
+  `HUNTER_WIKI=ON` skips HunterGate, which both projects only need for their
+  test harnesses. The libks headers package deliberately contains
+  `libks\CMakeLists.txt` and `libks\cmake\ksutil.cmake` next to
+  `libks\src\include`: signalwire-c's `FindLibKS.cmake` reads the version from
+  the former and includes the latter. Neither library uses a debug postfix, so
+  Debug files are `ks2.*` / `signalwire_client2.*` too. libks's public headers
+  include `<openssl/ssl.h>`, so a consumer of the libks package also needs the
+  OpenSSL headers on its include path (in FreeSWITCH: import `openssl.props`
+  next to `libks.props`); nothing extra is linked.
 - **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which

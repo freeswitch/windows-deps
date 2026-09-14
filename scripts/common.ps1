@@ -214,6 +214,31 @@ function Get-DepPackageRoot([string]$Dep, [string]$Kind, [string]$CacheDir, [str
     $root
 }
 
+# Assembles a conventional OpenSSL install root (include\openssl\*.h merged from
+# include/ and include_<arch>/, plus lib\libcrypto.lib, libssl.lib) for one
+# platform/config out of this repository's openssl package, so CMake's
+# FindOpenSSL can simply be pointed at it with OPENSSL_ROOT_DIR. Returns the root.
+function Get-OpenSSLRootForCMake([string]$Platform, [string]$Config, [string]$CacheDir) {
+    $hdr = Get-DepPackageRoot -Dep openssl -Kind headers  -CacheDir $CacheDir
+    $bin = Get-DepPackageRoot -Dep openssl -Kind binaries -CacheDir $CacheDir -Platform $Platform -Config $Config
+    $root = Join-Path $CacheDir "openssl-root-$Platform-$Config"
+    if (-not (Test-Path (Join-Path $root 'lib\libcrypto.lib'))) {
+        $inc = Join-Path $root 'include\openssl'
+        $lib = Join-Path $root 'lib'
+        New-Item -ItemType Directory -Force -Path $inc, $lib | Out-Null
+        Copy-Item -Path (Join-Path $hdr 'include\openssl\*') -Destination $inc -Recurse -Force
+        $archDir = if ($Platform -eq 'Win32') { 'include_x86' } else { "include_$Platform" }
+        $archInc = Join-Path $hdr "$archDir\openssl"
+        if (Test-Path $archInc) { Copy-Item -Path (Join-Path $archInc '*') -Destination $inc -Recurse -Force }
+        $binDir = Join-Path $bin "binaries\$Platform\$Config"
+        Get-ChildItem $binDir -File | Where-Object { $_.Extension -in @('.lib', '.pdb') } | Copy-Item -Destination $lib -Force
+        foreach ($must in 'include\openssl\ssl.h', 'include\openssl\configuration.h', 'lib\libcrypto.lib', 'lib\libssl.lib') {
+            if (-not (Test-Path (Join-Path $root $must))) { throw "OpenSSL package is missing '$must' (assembling $root)." }
+        }
+    }
+    $root
+}
+
 # --- packaging ----------------------------------------------------------------
 function New-PackageZip([string]$SourceDir, [string]$ZipPath) {
     if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }

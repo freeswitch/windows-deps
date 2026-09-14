@@ -15,6 +15,16 @@
       "version": "1.6.58",
       "source": "https://github.com/pnggroup/libpng/archive/refs/tags/v{version}.tar.gz",
       "deps": ["zlib"]
+    },
+    "libks": {
+      "version": "2.0.11",
+      "source": "https://github.com/signalwire/libks/archive/refs/tags/v{version}.tar.gz",
+      "deps": ["openssl"]
+    },
+    "signalwire-client-c": {
+      "version": "2.0.5",
+      "source": "https://github.com/signalwire/signalwire-c/archive/refs/tags/v{version}.tar.gz",
+      "deps": ["libks", "openssl"]
     }
   }
 }

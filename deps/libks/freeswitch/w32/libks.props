@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="libks-version.props" Condition=" '$(libksVersionImported)' == ''"/>
+    <Import Project="downloadpackage.task" Condition=" '$(downloadpackagetask_Imported)' == '' " />
+  </ImportGroup>
+
+  <PropertyGroup>
+    <libksPropsImported>true</libksPropsImported>
+  </PropertyGroup>
+
+  <PropertyGroup Label="UserMacros">
+    <!-- Package name = zip prefix = folder inside the zips. It includes the build
+         number, so a rebuilt package lands in a NEW folder and gets picked up
+         (the download task skips anything whose folder already exists). -->
+    <libksPkg>libks-$(libksVersion)_$(libksBuildNumber)</libksPkg>
+    <libksDir>$(BaseDir)libs\$(libksPkg)</libksDir>
+    <libksBinDir>$(libksDir)\binaries\$(Platform)\$(Configuration)</libksBinDir>
+    <!-- GitHub Release assets of freeswitch/windows-deps (tag libks-v<version>_<build>). -->
+    <libksPkgBase>https://github.com/freeswitch/windows-deps/releases/download/libks-v$(libksVersion)_$(libksBuildNumber)</libksPkgBase>
+  </PropertyGroup>
+
+  <!--
+       Download Target.
+       Name must be unique.
+       By design, targets are executed only once per project.
+
+       Usage:
+
+       package: URI
+
+       expectfileordirectory: Skips the download and extraction if exists
+
+       outputfolder: Folder to store a downloaded file.
+                     By default "$(BaseDir)libs", if empty
+
+       outputfilename: If not empty, overrides filename from URI.
+                       .exe files don't get extracted
+
+       extractto: Folder to extract an archive to
+   -->
+
+  <Target Name="libksBinariesDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(libksPkgBase)/$(libksPkg)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
+           expectfileordirectory="$(libksBinDir)\ks2.dll"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs\"
+      />
+  </Target>
+  <Target Name="libksHeadersDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(libksPkgBase)/$(libksPkg)-headers.zip"
+           expectfileordirectory="$(libksDir)\libks\src\include\libks\ks.h"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs\"
+      />
+  </Target>
+
+  <!-- Copy ks2.dll next to the FreeSWITCH binary. SkipUnchangedFiles refreshes it
+       when the package changes instead of leaving a stale copy. -->
+  <Target Name="libkscopyTarget" BeforeTargets="CustomBuild" DependsOnTargets="libksBinariesDownloadTarget">
+        <Message Text="Copying libks libraries to the freeswitch output folder." Importance="High" />
+        <ItemGroup>
+             <libksFiles Include="$(libksBinDir)\*.dll"/>
+        </ItemGroup>
+        <Copy SkipUnchangedFiles="true"
+            SourceFiles="@(libksFiles)"
+            DestinationFiles="@(libksFiles->'$(BaseDir)\$(Platform)\$(Configuration)\%(Filename)%(Extension)')"
+        />
+  </Target>
+
+  <!-- NOTE: libks's public headers include <openssl/ssl.h>, so a project using
+       libks must also import openssl.props (OpenSSL headers on the include path).
+       OpenSSL itself is linked statically into ks2.dll; nothing else to link. -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(libksDir)\libks\src\include;$(libksDir)\libks\src\include\libks;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>__KS_FUNC__=__FUNCSIG__;WIN32;_WINDOWS;SWCLT_VERSION_MAJOR=1;SWCLT_VERSION_MINOR=0;SWCLT_VERSION_REVISION=0;_WIN32_WINNT=0x0600;_WINSOCK_DEPRECATED_NO_WARNINGS=1;WIN32_LEAN_AND_MEAN=1;KS_PLAT_WIN=1;NOMAXMIN=1;_CRT_SECURE_NO_WARNINGS=1;SWCLT_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(libksBinDir)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ks2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

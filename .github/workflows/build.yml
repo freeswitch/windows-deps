@@ -100,9 +100,23 @@ jobs:
     with:
       dep: libpng
 
+  libks:
+    needs: [plan, openssl]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.affected), 'libks') && needs.openssl.result != 'failure' && needs.openssl.result != 'cancelled' }}
+    uses: ./.github/workflows/build-dep.yml
+    with:
+      dep: libks
+
+  signalwire-client-c:
+    needs: [plan, libks, openssl]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.affected), 'signalwire-client-c') && needs.libks.result != 'failure' && needs.libks.result != 'cancelled' && needs.openssl.result != 'failure' && needs.openssl.result != 'cancelled' }}
+    uses: ./.github/workflows/build-dep.yml
+    with:
+      dep: signalwire-client-c
+
   # ---- publish ------------------------------------------------------------------
   publish:
-    needs: [plan, zlib, openssl, libpng]
+    needs: [plan, zlib, openssl, libpng, libks, signalwire-client-c]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.affected != '[]' && (github.event_name == 'push' || inputs.publish) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     permissions:
