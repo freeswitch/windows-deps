@@ -99,6 +99,9 @@ packages (name + tag) a package was built against.
    message says), adds nodes that have never been released for their current version,
    expands the set to all transitive dependents, sorts it topologically and
    assigns tags. Output: `plan.json` (also a workflow artifact).
+   Files under `deps/<name>/freeswitch/` are the exception: they only say how
+   FreeSWITCH consumes the package, never what goes into it, so editing them
+   rebuilds nothing.
 2. **one job per node** (`build.yml`): `needs` mirrors the graph edges, so
    `openssl` runs after `zlib`; each job is gated on the plan and skipped when
    its node is not affected (`!cancelled()` lets a job run when its upstream
@@ -109,7 +112,8 @@ packages (name + tag) a package was built against.
 3. **publish**: one Release per affected node with the planned tag, only if
    every affected build succeeded, so the set of releases is consistent.
 
-Examples: a commit touching only `deps/openssl/` rebuilds `openssl` (one job).
+Examples: a commit touching only `deps/openssl/` rebuilds `openssl` (one job),
+unless it touches nothing but `deps/openssl/freeswitch/`.
 Bumping zlib in `deps.json` rebuilds `zlib`, then `openssl` against the new zlib
 package from the same run. Editing `scripts/common.ps1` rebuilds everything.
 
@@ -202,12 +206,20 @@ path `C:\src\artifacts\zlib`.
 
 ## Consuming in FreeSWITCH
 
-Each `deps/<name>/freeswitch/w32/` holds drop-in replacements for the
-corresponding files in FreeSWITCH's `w32\`. They download from
+Each `deps/<name>/freeswitch/w32/` holds a copy of the corresponding files in
+FreeSWITCH's `w32\`. They download from
 `https://github.com/freeswitch/windows-deps/releases/download/<name>-v<ver>_<build>/`
 into `libs\<name>-<ver>_<build>\`, and expose the version and build number as
 `<name>Version` / `<name>BuildNumber` in `<name>-version.props`. Bumping a
 package in FreeSWITCH is a change to those two values.
+
+The build number is part of the folder name on purpose: FreeSWITCH's download
+task skips a package whose folder already exists, so a rebuilt package would
+otherwise never be picked up. libpng is the one node that also removed
+something: FreeSWITCH used to build it in-tree from an unversioned tarball
+(`libs\win32\libpng\libpng.2017.vcxproj`, `w32\download_libpng.props` and a
+project in the solution — all gone), and `FreeSwitchCore` / `mod_png` import
+`libpng.props` instead of referencing that project.
 
 Notes carried over from the individual builders:
 

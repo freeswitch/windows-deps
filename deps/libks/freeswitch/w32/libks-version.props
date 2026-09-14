@@ -4,7 +4,6 @@
     <Import Project="basedir.props" Condition=" '$(BaseDirImported)' == ''"/>
   </ImportGroup>
   <PropertyGroup Label="UserMacros">
-    <!-- Release tag in freeswitch/windows-deps: libks-v$(libksVersion)_$(libksBuildNumber) -->
     <libksVersion>2.0.11</libksVersion>
     <libksBuildNumber>1</libksBuildNumber>
   </PropertyGroup>
@@ -16,9 +15,6 @@
   <ItemGroup>
     <BuildMacro Include="libksVersion">
       <Value>$(libksVersion)</Value>
-    </BuildMacro>
-    <BuildMacro Include="libksBuildNumber">
-      <Value>$(libksBuildNumber)</Value>
     </BuildMacro>
   </ItemGroup>
 </Project>

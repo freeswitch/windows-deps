@@ -2,10 +2,6 @@
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ImportGroup Label="PropertySheets">
     <Import Project="signalwire-client-c-version.props" Condition=" '$(signalwire-client-cVersionImported)' == ''"/>
-    <Import Project="downloadpackage.task" Condition=" '$(downloadpackagetask_Imported)' == '' " />
-    <!-- signalwire_client2.dll loads ks2.dll at run time; libks.props downloads the
-         matching libks package and copies that DLL to the output dir. -->
-    <Import Project="libks.props" Condition=" '$(libksPropsImported)' == '' "/>
   </ImportGroup>
 
   <PropertyGroup>
@@ -13,27 +9,21 @@
   </PropertyGroup>
 
   <PropertyGroup Label="UserMacros">
-    <!-- Package name = zip prefix = folder inside the zips (build number included so a
-         rebuilt package lands in a new folder and gets picked up). -->
-    <signalwire-client-cPkg>signalwire-client-c-$(signalwire-client-cVersion)_$(signalwire-client-cBuildNumber)</signalwire-client-cPkg>
-    <signalwire-client-cDir>$(BaseDir)libs\$(signalwire-client-cPkg)</signalwire-client-cDir>
-    <signalwire-client-cBinDir>$(signalwire-client-cDir)\binaries\$(Platform)\$(Configuration)</signalwire-client-cBinDir>
-    <!-- GitHub Release assets of freeswitch/windows-deps (tag signalwire-client-c-v<version>_<build>). -->
-    <signalwire-client-cPkgBase>https://github.com/freeswitch/windows-deps/releases/download/signalwire-client-c-v$(signalwire-client-cVersion)_$(signalwire-client-cBuildNumber)</signalwire-client-cPkgBase>
+    <signalwire-client-cDir>$(BaseDir)libs\signalwire-client-c-$(signalwire-client-cVersion)_$(signalwire-client-cBuildNumber)</signalwire-client-cDir>
   </PropertyGroup>
 
-  <!--
+  <!-- 
        Download Target.
-       Name must be unique.
+       Name must be unique. 
        By design, targets are executed only once per project.
-
+       
        Usage:
-
+       
        package: URI
 
        expectfileordirectory: Skips the download and extraction if exists
 
-       outputfolder: Folder to store a downloaded file.
+       outputfolder: Folder to store a downloaded file. 
                      By default "$(BaseDir)libs", if empty
 
        outputfilename: If not empty, overrides filename from URI.
@@ -42,36 +32,36 @@
        extractto: Folder to extract an archive to
    -->
 
-  <Target Name="signalwire-client-cBinariesDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
-      <DownloadPackageTask
-           package="$(signalwire-client-cPkgBase)/$(signalwire-client-cPkg)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
-           expectfileordirectory="$(signalwire-client-cBinDir)\signalwire_client2.dll"
+  <Target Name="signalwire-client-cBinariesDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">  
+      <DownloadPackageTask 
+           package="https://github.com/freeswitch/windows-deps/releases/download/signalwire-client-c-v$(signalwire-client-cVersion)_$(signalwire-client-cBuildNumber)/signalwire-client-c-$(signalwire-client-cVersion)_$(signalwire-client-cBuildNumber)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
+           expectfileordirectory="$(signalwire-client-cDir)\binaries\$(Platform)\$(Configuration)\signalwire_client2.dll" 
            outputfolder=""
-           outputfilename=""
+           outputfilename="" 
            extractto="$(BaseDir)libs\"
       />
-  </Target>
-  <Target Name="signalwire-client-cHeadersDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
-      <DownloadPackageTask
-           package="$(signalwire-client-cPkgBase)/$(signalwire-client-cPkg)-headers.zip"
-           expectfileordirectory="$(signalwire-client-cDir)\include\signalwire-client-c\client.h"
+  </Target> 
+  <Target Name="signalwire-client-cHeadersDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">  
+      <DownloadPackageTask 
+           package="https://github.com/freeswitch/windows-deps/releases/download/signalwire-client-c-v$(signalwire-client-cVersion)_$(signalwire-client-cBuildNumber)/signalwire-client-c-$(signalwire-client-cVersion)_$(signalwire-client-cBuildNumber)-headers.zip"
+           expectfileordirectory="$(signalwire-client-cDir)\include\signalwire-client-c\client.h" 
            outputfolder=""
-           outputfilename=""
+           outputfilename="" 
            extractto="$(BaseDir)libs\"
       />
-  </Target>
+  </Target> 
 
-  <!-- Copy signalwire_client2.dll next to the FreeSWITCH binary. -->
-  <Target Name="signalwire-client-ccopyTarget" BeforeTargets="CustomBuild" DependsOnTargets="signalwire-client-cBinariesDownloadTarget">
+  <Target Name="signalwire-client-ccopyTarget" BeforeTargets="CustomBuild" DependsOnTargets="signalwire-client-cBinariesDownloadTarget">  
         <Message Text="Copying signalwire-client-c libraries to the freeswitch output folder." Importance="High" />
-        <ItemGroup>
-             <signalwire-client-cFiles Include="$(signalwire-client-cBinDir)\*.dll"/>
-        </ItemGroup>
-        <Copy SkipUnchangedFiles="true"
-            SourceFiles="@(signalwire-client-cFiles)"
-            DestinationFiles="@(signalwire-client-cFiles->'$(BaseDir)\$(Platform)\$(Configuration)\%(Filename)%(Extension)')"
-        />
-  </Target>
+        <ItemGroup>  
+             <signalwire-client-cFiles Include="$(signalwire-client-cDir)\binaries\$(Platform)\$(Configuration)\*.dll"/>  
+        </ItemGroup>  
+        <Copy Condition="!exists('$(BaseDir)\$(Platform)\$(Configuration)\signalwire_client2.dll')"
+            SourceFiles="@(signalwire-client-cFiles)"  
+            DestinationFiles="@(signalwire-client-cFiles->'$(BaseDir)\$(Platform)\$(Configuration)\%(Filename)%(Extension)')"  
+        />  
+  </Target>   
+
 
   <ItemDefinitionGroup>
     <ClCompile>
@@ -79,7 +69,7 @@
       <PreprocessorDefinitions>%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(signalwire-client-cBinDir)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(signalwire-client-cDir)\binaries\$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>signalwire_client2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

@@ -4,7 +4,6 @@
     <Import Project="basedir.props" Condition=" '$(BaseDirImported)' == ''"/>
   </ImportGroup>
   <PropertyGroup Label="UserMacros">
-    <!-- Release tag in freeswitch/windows-deps: libpq-v$(libpqVersion)_$(libpqBuildNumber) -->
     <libpqVersion>17.11</libpqVersion>
     <libpqBuildNumber>1</libpqBuildNumber>
   </PropertyGroup>
@@ -16,9 +15,6 @@
   <ItemGroup>
     <BuildMacro Include="libpqVersion">
       <Value>$(libpqVersion)</Value>
-    </BuildMacro>
-    <BuildMacro Include="libpqBuildNumber">
-      <Value>$(libpqBuildNumber)</Value>
     </BuildMacro>
   </ItemGroup>
 </Project>

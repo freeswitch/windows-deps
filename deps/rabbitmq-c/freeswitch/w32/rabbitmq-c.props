@@ -7,44 +7,60 @@
          OpenSSL, so the consumer links the OpenSSL package too. -->
     <Import Project="openssl.props" Condition=" '$(OpensslPropsImported)' == '' "/>
   </ImportGroup>
+
   <PropertyGroup Label="UserMacros">
-    <!-- Package name = zip prefix = folder inside the zips (build number included so a
-         rebuilt package lands in a new folder and gets picked up). -->
-    <rabbitmq_cPkg>rabbitmq-c-$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber)</rabbitmq_cPkg>
-    <rabbitmq_c_libDir>$(BaseDir)libs\$(rabbitmq_cPkg)</rabbitmq_c_libDir>
-    <rabbitmq_cBinDir>$(rabbitmq_c_libDir)\binaries\$(Platform)\$(Configuration)</rabbitmq_cBinDir>
-    <!-- GitHub Release assets of freeswitch/windows-deps (tag rabbitmq-c-v<version>_<build>). -->
-    <rabbitmq_cPkgBase>https://github.com/freeswitch/windows-deps/releases/download/rabbitmq-c-v$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber)</rabbitmq_cPkgBase>
+    <rabbitmq_c_libDir>$(BaseDir)libs\rabbitmq-c-$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber)</rabbitmq_c_libDir>
   </PropertyGroup>
-  <Target Name="rabbitmq-c-binariesTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
-      <DownloadPackageTask
-           package="$(rabbitmq_cPkgBase)/$(rabbitmq_cPkg)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
-           expectfileordirectory="$(rabbitmq_cBinDir)\librabbitmq.4.lib"
+
+  <!-- 
+       Download Target.
+       Name must be unique. 
+       By design, targets are executed only once per project.
+       
+       Usage:
+       
+       package: URI
+
+       expectfileordirectory: Skips the download and extraction if exists
+
+       outputfolder: Folder to store a downloaded file. 
+                     By default "$(BaseDir)libs", if empty
+
+       outputfilename: If not empty, overrides filename from URI.
+                       .exe files don't get extracted
+
+       extractto: Folder to extract an archive to
+   -->
+
+  <Target Name="rabbitmq-c-binariesTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">  
+      <DownloadPackageTask 
+           package="https://github.com/freeswitch/windows-deps/releases/download/rabbitmq-c-v$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber)/rabbitmq-c-$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
+           expectfileordirectory="$(rabbitmq_c_libDir)\binaries\$(Platform.ToLower())\$(Configuration.ToLower())\librabbitmq.4.lib" 
            outputfolder=""
-           outputfilename=""
+           outputfilename="" 
            extractto="$(BaseDir)libs"
       />
-  </Target>
-  <Target Name="rabbitmq-c-headersTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
-      <DownloadPackageTask
-           package="$(rabbitmq_cPkgBase)/$(rabbitmq_cPkg)-headers.zip"
-           expectfileordirectory="$(rabbitmq_c_libDir)\include\amqp.h"
+  </Target> 
+
+  <Target Name="rabbitmq-c-headersTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">  
+      <DownloadPackageTask 
+           package="https://github.com/freeswitch/windows-deps/releases/download/rabbitmq-c-v$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber)/rabbitmq-c-$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber)-headers.zip"
+           expectfileordirectory="$(rabbitmq_c_libDir)\include\amqp.h" 
            outputfolder=""
-           outputfilename=""
+           outputfilename="" 
            extractto="$(BaseDir)libs"
       />
-  </Target>
+  </Target> 
+
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>$(rabbitmq_c_libDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <!-- AMQP_STATIC: the package is the static library; without it rabbitmq-c's
-           export.h declares the API dllimport and the link only succeeds with
-           LNK4217 "locally defined symbol imported" warnings. -->
       <PreprocessorDefinitions>AMQP_STATIC;AMQP_MAJOR_VERSION=$(rabbitmq_cMajorVersion);AMQP_MINOR_VERSION=$(rabbitmq_cMinorVersion);%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(rabbitmq_cBinDir)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(rabbitmq_c_libDir)\binaries\$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>librabbitmq.4.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
+
 </Project>

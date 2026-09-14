@@ -5,7 +5,8 @@
 
     A node is rebuilt when:
       - its own version in deps.json changed, or files under deps/<name>/ changed
-        (between -BaseRef and -HeadRef), or it is listed in -Changed, or -All;
+        between -BaseRef and -HeadRef (deps/<name>/freeswitch/ excluded: those are
+        the consumer-side property sheets), or it is listed in -Changed, or -All;
       - something that goes into every package changed (scripts/common.ps1,
         scripts/build.ps1, docker/): then everything -- unless the head commit
         message scopes it with "[deps: a,b]" (only those nodes, plus their
@@ -95,7 +96,11 @@ if ($BaseRef -and -not $everything) {
         foreach ($f in $files) {
             $f = $f -replace '\\', '/'
             if ($f -match '^deps/([^/]+)/') {
-                if ($Matches[1] -in $names) { [void]$changedSet.Add($Matches[1]) }
+                # deps/<name>/freeswitch/ holds the property sheets FreeSWITCH consumes the
+                # package with. They document the package, they never go INTO it, so editing
+                # them must not trigger a rebuild (and a pointless new release).
+                $node = $Matches[1]
+                if ($node -in $names -and $f -notmatch '^deps/[^/]+/freeswitch/') { [void]$changedSet.Add($node) }
             } elseif ($f -eq 'deps.json') {
                 $oldText = & git -C $RepoRoot show "${BaseRef}:deps.json" 2>$null
                 if ($LASTEXITCODE -ne 0) { $everything = $true; continue }

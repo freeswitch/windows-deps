@@ -8,38 +8,29 @@
     <Import Project="downloadpackage.task" Condition=" '$(downloadpackagetask_Imported)' == '' " />
   </ImportGroup>
 
-  <!-- The packages ship only Release and Debug; map any project configuration
-       (e.g. "Release All") onto one of them. Debug binaries carry the "d" postfix. -->
   <PropertyGroup>
     <LibraryConfiguration Condition="$(Configuration.ToLower().Contains('debug'))">Debug</LibraryConfiguration>
     <LibraryConfiguration Condition="$(Configuration.ToLower().Contains('release'))">Release</LibraryConfiguration>
-    <LibraryFileName Condition=" '$(LibraryConfiguration)' == 'Debug' ">zlibd</LibraryFileName>
-    <LibraryFileName Condition=" '$(LibraryConfiguration)' == 'Release' ">zlib</LibraryFileName>
+    <LibraryFileName Condition=" '$(LibraryConfiguration)' == 'Debug' ">zlibd</LibraryFileName> 
+    <LibraryFileName Condition=" '$(LibraryConfiguration)' == 'Release' ">zlib</LibraryFileName> 
   </PropertyGroup>
 
   <PropertyGroup Label="UserMacros">
-    <!-- Package name = zip prefix = folder inside the zips. It includes the build
-         number, so a rebuilt package lands in a NEW folder and gets picked up
-         (the download task skips anything whose folder already exists). -->
-    <zlibPkg>zlib-$(zlibVersion)_$(zlibBuildNumber)</zlibPkg>
-    <zlibLibDir>$(BaseDir)libs\$(zlibPkg)</zlibLibDir>
-    <zlibBinDir>$(zlibLibDir)\binaries\$(Platform)\$(LibraryConfiguration)</zlibBinDir>
-    <!-- GitHub Release assets of freeswitch/windows-deps (tag zlib-v<version>_<build>). -->
-    <zlibPkgBase>https://github.com/freeswitch/windows-deps/releases/download/zlib-v$(zlibVersion)_$(zlibBuildNumber)</zlibPkgBase>
+    <zlibLibDir>$(BaseDir)libs\zlib-$(zlibVersion)_$(zlibBuildNumber)</zlibLibDir>
   </PropertyGroup>
 
-  <!--
+  <!-- 
        Download Target.
-       Name must be unique.
+       Name must be unique. 
        By design, targets are executed only once per project.
-
+       
        Usage:
-
+       
        package: URI
 
        expectfileordirectory: Skips the download and extraction if exists
 
-       outputfolder: Folder to store a downloaded file.
+       outputfolder: Folder to store a downloaded file. 
                      By default "$(BaseDir)libs", if empty
 
        outputfilename: If not empty, overrides filename from URI.
@@ -48,40 +39,34 @@
        extractto: Folder to extract an archive to
    -->
 
-  <!-- Download + extract the per-platform, per-configuration binaries (DLL + import lib + static lib). -->
-  <Target Name="zlibBinariesDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
-      <DownloadPackageTask
-           package="$(zlibPkgBase)/$(zlibPkg)-binaries-$(Platform.ToLower())-$(LibraryConfiguration.ToLower()).zip"
-           expectfileordirectory="$(zlibBinDir)\lib\$(LibraryFileName).lib"
+  <Target Name="zlibBinariesDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">  
+      <DownloadPackageTask 
+           package="https://github.com/freeswitch/windows-deps/releases/download/zlib-v$(zlibVersion)_$(zlibBuildNumber)/zlib-$(zlibVersion)_$(zlibBuildNumber)-binaries-$(Platform.ToLower())-$(LibraryConfiguration.ToLower()).zip"
+           expectfileordirectory="$(zlibLibDir)\binaries\$(Platform)\$(LibraryConfiguration)\lib\$(LibraryFileName).lib"
            outputfolder=""
-           outputfilename=""
+           outputfilename="" 
            extractto="$(BaseDir)libs\"
       />
-  </Target>
-
-  <!-- Download + extract the public headers (platform/configuration independent). -->
-  <Target Name="zlibHeadersDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
-      <DownloadPackageTask
-           package="$(zlibPkgBase)/$(zlibPkg)-headers.zip"
-           expectfileordirectory="$(zlibLibDir)\include\zlib.h"
+  </Target> 
+  <Target Name="zlibHeadersDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">  
+      <DownloadPackageTask 
+           package="https://github.com/freeswitch/windows-deps/releases/download/zlib-v$(zlibVersion)_$(zlibBuildNumber)/zlib-$(zlibVersion)_$(zlibBuildNumber)-headers.zip"
+           expectfileordirectory="$(zlibLibDir)\include\zlib.h" 
            outputfolder=""
-           outputfilename=""
+           outputfilename="" 
            extractto="$(BaseDir)libs\"
       />
-  </Target>
+  </Target> 
 
-  <!-- Copy zlib.dll / zlibd.dll next to the FreeSWITCH binary. SkipUnchangedFiles
-       refreshes it when the source differs, so switching configuration or package
-       updates the output DLL instead of leaving a stale one. -->
-  <Target Name="zlibcopyTarget" BeforeTargets="CustomBuild" DependsOnTargets="zlibBinariesDownloadTarget">
-      <ItemGroup>
-          <zlibFiles Include="$(zlibBinDir)\bin\*.dll" />
-      </ItemGroup>
-      <Copy SkipUnchangedFiles="true"
-          SourceFiles="@(zlibFiles)"
+  <Target Name="zlibcopyTarget" BeforeTargets="CustomBuild" DependsOnTargets="zlibBinariesDownloadTarget">  
+      <ItemGroup>  
+          <zlibFiles Include="$(zlibLibDir)\binaries\$(Platform)\$(LibraryConfiguration)\bin\*.dll" />
+      </ItemGroup>  
+      <Copy Condition="!exists('$(BaseDir)$(Platform)\$(LibraryConfiguration)\$(LibraryFileName).dll')"
+          SourceFiles="@(zlibFiles)"  
           DestinationFiles="@(zlibFiles->'$(BaseDir)$(Platform)\$(LibraryConfiguration)\%(Filename)%(Extension)')"
-      />
-  </Target>
+      />  
+  </Target>   
 
   <ItemDefinitionGroup>
     <ClCompile>
@@ -89,9 +74,7 @@
       <PreprocessorDefinitions>HAVE_ZLIB;ZLIB_STATICLIB;Z_SOLO;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <!-- zlib.lib / zlibd.lib is the import library for zlib.dll / zlibd.dll.
-           Link zlibstatic.lib / zlibstaticd.lib instead for a static build. -->
-      <AdditionalLibraryDirectories>$(zlibBinDir)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(zlibLibDir)\binaries\$(Platform)\$(LibraryConfiguration)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>$(LibraryFileName).lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

@@ -4,7 +4,6 @@
     <Import Project="basedir.props" Condition=" '$(BaseDirImported)' == ''"/>
   </ImportGroup>
   <PropertyGroup Label="UserMacros">
-    <!-- Release tag in freeswitch/windows-deps: libpcap-v$(libpcapVersion)_$(libpcapBuildNumber) -->
     <libpcapVersion>1.10.7</libpcapVersion>
     <libpcapBuildNumber>1</libpcapBuildNumber>
   </PropertyGroup>
@@ -16,9 +15,6 @@
   <ItemGroup>
     <BuildMacro Include="libpcapVersion">
       <Value>$(libpcapVersion)</Value>
-    </BuildMacro>
-    <BuildMacro Include="libpcapBuildNumber">
-      <Value>$(libpcapBuildNumber)</Value>
     </BuildMacro>
   </ItemGroup>
 </Project>

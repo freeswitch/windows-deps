@@ -4,7 +4,6 @@
     <Import Project="basedir.props" Condition=" '$(BaseDirImported)' == ''"/>
   </ImportGroup>
   <PropertyGroup Label="UserMacros">
-    <!-- Release tag in freeswitch/windows-deps: rabbitmq-c-v$(rabbitmq_cVersion)_$(rabbitmq_cBuildNumber) -->
     <rabbitmq_cMajorVersion>0</rabbitmq_cMajorVersion>
     <rabbitmq_cMinorVersion>17</rabbitmq_cMinorVersion>
     <rabbitmq_cRevisionVersion>0</rabbitmq_cRevisionVersion>
@@ -19,9 +18,6 @@
   <ItemGroup>
     <BuildMacro Include="rabbitmq_cVersion">
       <Value>$(rabbitmq_cVersion)</Value>
-    </BuildMacro>
-    <BuildMacro Include="rabbitmq_cBuildNumber">
-      <Value>$(rabbitmq_cBuildNumber)</Value>
     </BuildMacro>
   </ItemGroup>
 </Project>
