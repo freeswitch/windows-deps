@@ -36,15 +36,16 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "libpng":  { "version": "1.6.58", "source": "https://github.com/pnggroup/libpng/archive/refs/tags/v{version}.tar.gz",                   "deps": ["zlib"] },
     "libks":   { "version": "2.0.11", "source": "https://github.com/signalwire/libks/archive/refs/tags/v{version}.tar.gz",                  "deps": ["openssl"] },
     "signalwire-client-c": { "version": "2.0.5", "source": "https://github.com/signalwire/signalwire-c/archive/refs/tags/v{version}.tar.gz", "deps": ["libks", "openssl"] },
-    "curl":    { "version": "7.88.1", "source": "https://github.com/curl/curl/releases/download/curl-{version_}/curl-{version}.tar.gz",       "deps": ["zlib", "openssl"] }
+    "curl":    { "version": "7.88.1", "source": "https://github.com/curl/curl/releases/download/curl-{version_}/curl-{version}.tar.gz",       "deps": ["zlib", "openssl"] },
+    "libpcap": { "version": "1.10.7", "source": "https://github.com/the-tcpdump-group/libpcap/archive/refs/tags/libpcap-{version}.tar.gz",  "deps": [] }
   }
 }
 ```
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`
 needs `openssl`, `signalwire-client-c` needs `libks` and `openssl`, `curl` needs
-`zlib` and `openssl`, so each is built after its dependencies and against their
-packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
+`zlib` and `openssl`, `libpcap` stands alone, so each is built after its
+dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
 version and `{version_}` to the version with dots replaced by underscores
@@ -238,6 +239,18 @@ Notes carried over from the individual builders:
   library, i.e. that the feature set of the old packages was reproduced. The
   version stays on the 7.88 line (7.88.1) as FreeSWITCH ships; bumping to 8.x
   is a plain `deps.json` change.
+- **libpcap is a static `pcap_static.lib` built with `PCAP_TYPE=null`**: it
+  reads and writes pcap/pcapng files (what FreeSWITCH uses it for) and cannot
+  capture live traffic, because no Npcap SDK is involved — same as the old
+  packages. Remote capture is off, so OpenSSL is not used and the node has no
+  dependencies (the old wrapper passed OpenSSL paths, and 1.10.4's CMake pulled
+  OpenSSL in unconditionally; 1.10.7 only looks for it with `ENABLE_REMOTE`).
+  Static CRT (`/MT`), libpcap's MSVC default and what the old packages had.
+  The old wrapper's patched `CMakeLists.txt` boils down to
+  `-D_CRT_DECLARE_NONSTDC_NAMES` (libpcap defines `__STDC__`, which makes the
+  UCRT hide `strdup` & co.); the script passes that via `CMAKE_C_FLAGS` instead
+  of patching. flex/bison are winflexbison, fetched at build time
+  (`WINFLEX_VERSION`, default 2.5.25).
 - **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which

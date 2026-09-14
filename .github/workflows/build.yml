@@ -123,11 +123,18 @@ jobs:
     with:
       dep: curl
 
+  libpcap:
+    needs: [plan]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(needs.plan.outputs.affected, '"libpcap"') }}
+    uses: ./.github/workflows/build-dep.yml
+    with:
+      dep: libpcap
+
   # ---- publish ------------------------------------------------------------------
   # The `if` must rule out an empty/'[]' affected list BEFORE the matrix below is
   # expanded: GitHub evaluates `if` first, then `strategy`.
   publish:
-    needs: [plan, zlib, openssl, libpng, libks, signalwire-client-c, curl]
+    needs: [plan, zlib, openssl, libpng, libks, signalwire-client-c, curl, libpcap]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.affected != '' && needs.plan.outputs.affected != '[]' && (github.event_name == 'push' || inputs.publish) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     permissions:

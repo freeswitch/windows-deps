@@ -30,6 +30,11 @@
       "version": "7.88.1",
       "source": "https://github.com/curl/curl/releases/download/curl-{version_}/curl-{version}.tar.gz",
       "deps": ["zlib", "openssl"]
+    },
+    "libpcap": {
+      "version": "1.10.7",
+      "source": "https://github.com/the-tcpdump-group/libpcap/archive/refs/tags/libpcap-{version}.tar.gz",
+      "deps": []
     }
   }
 }

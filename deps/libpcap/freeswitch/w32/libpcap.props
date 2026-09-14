@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="libpcap-version.props" Condition=" '$(libpcapVersionImported)' == '' "/>
+    <Import Project="downloadpackage.task" Condition=" '$(downloadpackagetask_Imported)' == '' " />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros">
+    <!-- Package name = zip prefix = folder inside the zips (build number included so a
+         rebuilt package lands in a new folder and gets picked up). -->
+    <libpcapPkg>libpcap-$(libpcapVersion)_$(libpcapBuildNumber)</libpcapPkg>
+    <libpcap_libDir>$(BaseDir)libs\$(libpcapPkg)</libpcap_libDir>
+    <libpcapBinDir>$(libpcap_libDir)\binaries\$(Platform)\$(Configuration)</libpcapBinDir>
+    <!-- GitHub Release assets of freeswitch/windows-deps (tag libpcap-v<version>_<build>). -->
+    <libpcapPkgBase>https://github.com/freeswitch/windows-deps/releases/download/libpcap-v$(libpcapVersion)_$(libpcapBuildNumber)</libpcapPkgBase>
+  </PropertyGroup>
+  <!--
+       Download Target.
+       Name must be unique.
+       By design, targets are executed only once per project.
+       Usage:
+       package: URI
+       expectfileordirectory: Skips the download and extraction if exists
+       outputfolder: Folder to store a downloaded file.
+                     By default "$(BaseDir)libs", if empty
+       outputfilename: If not empty, overrides filename from URI.
+                       .exe files don't get extracted
+       extractto: Folder to extract an archive to
+   -->
+  <Target Name="libpcap-binariesTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(libpcapPkgBase)/$(libpcapPkg)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
+           expectfileordirectory="$(libpcapBinDir)\pcap_static.lib"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs"
+      />
+  </Target>
+  <Target Name="libpcap-headersTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(libpcapPkgBase)/$(libpcapPkg)-headers.zip"
+           expectfileordirectory="$(libpcap_libDir)\include\pcap.h"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs"
+      />
+  </Target>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(libpcap_libDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>SWITCH_HAVE_PCAP;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <!-- pcap_static.lib: static libpcap built with PCAP_TYPE=null (pcap/pcapng file
+           I/O only, no live capture) and the static CRT. Needs ws2_32.lib, which
+           FreeSWITCH links anyway. -->
+      <AdditionalLibraryDirectories>$(libpcapBinDir)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>pcap_static.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

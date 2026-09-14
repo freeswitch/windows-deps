@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="basedir.props" Condition=" '$(BaseDirImported)' == ''"/>
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros">
+    <!-- Release tag in freeswitch/windows-deps: libpcap-v$(libpcapVersion)_$(libpcapBuildNumber) -->
+    <libpcapVersion>1.10.7</libpcapVersion>
+    <libpcapBuildNumber>1</libpcapBuildNumber>
+  </PropertyGroup>
+  <PropertyGroup>
+    <libpcapVersionImported>true</libpcapVersionImported>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="libpcapVersion">
+      <Value>$(libpcapVersion)</Value>
+    </BuildMacro>
+    <BuildMacro Include="libpcapBuildNumber">
+      <Value>$(libpcapBuildNumber)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>
