@@ -40,6 +40,11 @@
       "version": "0.17.0",
       "source": "https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v{version}.tar.gz",
       "deps": ["openssl"]
+    },
+    "libpq": {
+      "version": "17.11",
+      "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",
+      "deps": ["openssl"]
     }
   }
 }

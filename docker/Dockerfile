@@ -2,7 +2,8 @@
 #
 # Toolchain image for building every dependency in this repository on Windows:
 # Visual Studio 2022 Build Tools (MSVC + Windows SDK + nmake), Strawberry Perl
-# and NASM (OpenSSL), CMake (zlib and other CMake-based libraries).
+# and NASM (OpenSSL), CMake (zlib and other CMake-based libraries), Meson +
+# Ninja + Python + win_flex/win_bison (libpq).
 #
 # The image contains ONLY the toolchain. The repository is mounted at C:\src at
 # run time, so script changes never require rebuilding the (slow, multi-GB)
@@ -66,7 +67,25 @@ RUN Invoke-WebRequest -Uri $env:VS_BOOTSTRAPPER_URL -OutFile C:\vs_buildtools.ex
     Remove-Item C:\vs_buildtools.exe -Force
 
 # ---------------------------------------------------------------------------
-# 3. Entry point: the dispatcher from the mounted repository.
+# 3. Meson + Ninja + Python + flex/bison: PostgreSQL 17 removed src\tools\msvc,
+#    so libpq is built with Meson. PostgreSQL's meson.build requires perl,
+#    python, flex and bison at *configure* time even for a libpq-only build, and
+#    its FLEX/BISON defaults look for win_flex/win_bison -- the names the
+#    winflexbison3 package installs. Meson and Ninja come from pip so they are
+#    bound to the same Python.
+# ---------------------------------------------------------------------------
+RUN choco install -y --no-progress python3 winflexbison3; `
+    if ($LASTEXITCODE -ne 0) { throw ('choco install failed: ' + $LASTEXITCODE) }; `
+    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine'); `
+    python -m pip install --disable-pip-version-check --no-cache-dir 'meson~=1.7' 'ninja~=1.11'; `
+    if ($LASTEXITCODE -ne 0) { throw ('pip install meson/ninja failed: ' + $LASTEXITCODE) }; `
+    foreach ($t in @('python.exe', 'win_flex.exe', 'win_bison.exe', 'meson.exe', 'ninja.exe')) { `
+        if (-not (Get-Command $t -ErrorAction SilentlyContinue)) { throw ('not on PATH after install: ' + $t) } `
+    }; `
+    meson --version; ninja --version
+
+# ---------------------------------------------------------------------------
+# 4. Entry point: the dispatcher from the mounted repository.
 # ---------------------------------------------------------------------------
 # NOTE: do NOT set `ENV PATH` here -- the Windows base image exports the variable
 # as `Path` (mixed case) and Docker's ${...} substitution is case-sensitive, so

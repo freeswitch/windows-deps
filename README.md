@@ -38,14 +38,15 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "signalwire-client-c": { "version": "2.0.5", "source": "https://github.com/signalwire/signalwire-c/archive/refs/tags/v{version}.tar.gz", "deps": ["libks", "openssl"] },
     "curl":    { "version": "7.88.1", "source": "https://github.com/curl/curl/releases/download/curl-{version_}/curl-{version}.tar.gz",       "deps": ["zlib", "openssl"] },
     "libpcap": { "version": "1.10.7", "source": "https://github.com/the-tcpdump-group/libpcap/archive/refs/tags/libpcap-{version}.tar.gz",  "deps": [] },
-    "rabbitmq-c": { "version": "0.17.0", "source": "https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v{version}.tar.gz",             "deps": ["openssl"] }
+    "rabbitmq-c": { "version": "0.17.0", "source": "https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v{version}.tar.gz",             "deps": ["openssl"] },
+    "libpq":   { "version": "17.11",  "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",     "deps": ["openssl"] }
   }
 }
 ```
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
-`rabbitmq-c` need `openssl`, `signalwire-client-c` needs `libks` and `openssl`,
-`curl` needs `zlib` and `openssl`, `libpcap` stands alone, so each is built
+`rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap` stands alone, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -123,7 +124,8 @@ same build number.
 
 ### With Docker (Windows containers)
 
-The image holds the toolchain only (VS 2022 Build Tools, Perl, NASM, CMake); the
+The image holds the toolchain only (VS 2022 Build Tools, Perl, NASM, CMake, and
+Meson + Ninja + Python + win_flex/win_bison for libpq); the
 repository is mounted, so script edits need no image rebuild:
 
 ```powershell
@@ -138,7 +140,8 @@ Output: `.\artifacts\<dep>\`. cmd.exe: replace `${PWD}` with `%cd%`.
 ### Natively
 
 With Visual Studio 2022+ (C++ workload), CMake, and — for OpenSSL — Strawberry
-Perl and NASM:
+Perl and NASM; libpq additionally needs Meson, Ninja, Python and
+win_flex/win_bison (see `deps/libpq/prereqs.ps1`):
 
 ```powershell
 .\scripts\build.ps1 -Dep zlib
@@ -176,6 +179,8 @@ path `C:\src\artifacts\zlib`.
 | OpenSSL: `ZLIB_MODE` | `zlib-dynamic` | `zlib-dynamic` (load `zlib.dll` at run time), `zlib` (link `zlibstatic.lib`), `none`. |
 | OpenSSL: `OPENSSLDIR`, `EXTRA_CONFIG` | `C:/Program Files/FreeSWITCH/ssl`, `no-autoload-config` | Passed to `Configure`. |
 | zlib: `EXTRA_CMAKE` | *(empty)* | Extra CMake configure arguments. |
+| libpq: `PG_PREFIX` | `C:/Program Files/PostgreSQL/17` | `--prefix`; only reaches `pg_config_paths.h`, of which libpq uses `SYSCONFDIR` (where it looks for `pg_service.conf`). |
+| libpq: `EXTRA_MESON` | *(empty)* | Extra `meson setup` arguments. |
 
 `<DEP>` is the dependency name upper-cased with `-` → `_` (`RABBITMQ_C_PKG_BASE`).
 
@@ -264,7 +269,26 @@ Notes carried over from the individual builders:
   references OpenSSL. 0.17.0 was chosen over FreeSWITCH's current 0.15.0 because
   0.16.0 and 0.17.0 are security releases; every `amqp_*` function `mod_amqp`
   calls is still present.
-- **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
+- **libpq is built with Meson**: PostgreSQL 17 removed `src\tools\msvc`, the
+  MSBuild generator the old `libpq-packaging` drove, so the node configures the
+  tree with Meson and builds the single shared `libpq` target — the server, psql
+  and contrib are never compiled. Everything optional is off
+  (`-Dauto_features=disabled`) except SSL and LDAP (`wldap32`, as the old
+  `config.pl` had it). OpenSSL comes from this repository's package and is
+  linked **statically** into `libpq.dll`: no OpenSSL DLL has to sit next to it,
+  and since PostgreSQL links the DLL against its own `/DEF:` export list, only
+  the `PQ*` API is exported, so the private copy of OpenSSL inside cannot clash
+  with the one FreeSWITCH links itself. libpq does not use zlib — only the
+  server and `pg_dump` do — so the node depends on `openssl` alone. The source
+  is the official `postgresql-<version>.tar.gz` from `ftp.postgresql.org`, not a
+  GitHub tag archive. The headers zip reproduces the old package's layout
+  (`include\`, `include\libpq\`, `include\internal\`) plus the handful of
+  headers PostgreSQL 17's `libpq-int.h` newly pulls in, so `include\internal`
+  still resolves on its own; `mod_pgsql`, `mod_cdr_pg_csv` and the core's
+  `switch_pgsql` need nothing beyond `libpq-fe.h`. Dynamic CRT (`/MD`, `/MDd`),
+  like FreeSWITCH. `CC=cl` is set for the build because Strawberry Perl puts an
+  ancient `ccache` on the machine PATH, which Meson would otherwise adopt as a
+  compiler launcher.- **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which
   compiled an unversioned tarball into `libpng16.dll`). The package keeps the

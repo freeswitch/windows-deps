@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="libpq-version.props" Condition=" '$(libpqVersionImported)' == '' "/>
+    <Import Project="downloadpackage.task" Condition=" '$(downloadpackagetask_Imported)' == '' " />
+    <!-- No openssl.props here on purpose: libpq.dll links OpenSSL statically and
+         exports only the PQ* API, so consumers neither link nor deploy it.
+         (Code that includes the internal header include\internal\libpq-int.h
+         does need the OpenSSL headers - it includes openssl/ssl.h - but nothing
+         in FreeSWITCH does; libpq-fe.h is self-contained.) -->
+  </ImportGroup>
+
+  <PropertyGroup>
+    <libpqPropsImported>true</libpqPropsImported>
+  </PropertyGroup>
+
+  <PropertyGroup Label="UserMacros">
+    <!-- Package name = zip prefix = folder inside the zips (build number included so a
+         rebuilt package lands in a new folder and gets picked up). -->
+    <libpqPkg>libpq-$(libpqVersion)_$(libpqBuildNumber)</libpqPkg>
+    <libpqlibDir>$(BaseDir)libs\$(libpqPkg)</libpqlibDir>
+    <libpqBinDir>$(libpqlibDir)\binaries\$(Platform)\$(Configuration)</libpqBinDir>
+    <!-- GitHub Release assets of freeswitch/windows-deps (tag libpq-v<version>_<build>). -->
+    <libpqPkgBase>https://github.com/freeswitch/windows-deps/releases/download/libpq-v$(libpqVersion)_$(libpqBuildNumber)</libpqPkgBase>
+  </PropertyGroup>
+
+  <Target Name="libpqBinariesDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(libpqPkgBase)/$(libpqPkg)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
+           expectfileordirectory="$(libpqBinDir)\libpq.dll"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs"
+      />
+  </Target>
+  <Target Name="libpqHeadersDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(libpqPkgBase)/$(libpqPkg)-headers.zip"
+           expectfileordirectory="$(libpqlibDir)\include\libpq-fe.h"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs"
+      />
+  </Target>
+
+  <!-- libpq.dll has to sit next to FreeSWITCH.exe. -->
+  <Target Name="libpqcopyTarget" AfterTargets="Build" DependsOnTargets="Build">
+      <ItemGroup>
+          <libpqFiles Include="$(libpqBinDir)\*.dll"/>
+      </ItemGroup>
+      <Copy Condition="!exists('$(BaseDir)\$(Platform)\$(Configuration)\libpq.dll')"
+          SourceFiles="@(libpqFiles)"
+          DestinationFiles="@(libpqFiles-&gt;'$(BaseDir)\$(Platform)\$(Configuration)\%(Filename)%(Extension)')"
+      />
+  </Target>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(libpqlibDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>SWITCH_HAVE_PGSQL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(libpqBinDir)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <!-- libpq.lib is the import library of libpq.dll. Secur32.lib is kept from the
+           previous property sheet: libpq itself pulls it in through the DLL, so it is
+           only needed by code that calls SSPI directly, and linking it costs nothing. -->
+      <AdditionalDependencies>libpq.lib;Secur32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>
