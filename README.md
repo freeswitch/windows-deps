@@ -14,7 +14,6 @@ FreeSWITCH's `w32\*.props` only need a new download base and a build number.
 
 ```
 deps.json                       the manifest: every dependency, its version, its source tarball, what it depends on
-deps.lock                       where LOCAL builds take dependency packages from (CI uses the plan instead)
 deps/<name>/build.ps1           how to build + package <name> (one script per dependency)
 deps/<name>/prereqs.ps1         optional: tools to install on a GitHub runner before building <name>
 deps/<name>/freeswitch/w32/     reference MSBuild props for consuming the package in FreeSWITCH
@@ -32,15 +31,16 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 {
   "repository": "freeswitch/windows-deps",
   "deps": {
-    "zlib":    { "version": "1.3.2", "source": "https://github.com/madler/zlib/releases/download/v{version}/zlib-{version}.tar.gz",         "deps": [] },
-    "openssl": { "version": "3.4.7", "source": "https://github.com/openssl/openssl/releases/download/openssl-{version}/openssl-{version}.tar.gz", "deps": ["zlib"] }
+    "zlib":    { "version": "1.3.2",  "source": "https://github.com/madler/zlib/releases/download/v{version}/zlib-{version}.tar.gz",         "deps": [] },
+    "openssl": { "version": "3.4.7",  "source": "https://github.com/openssl/openssl/releases/download/openssl-{version}/openssl-{version}.tar.gz", "deps": ["zlib"] },
+    "libpng":  { "version": "1.6.58", "source": "https://github.com/pnggroup/libpng/archive/refs/tags/v{version}.tar.gz",                   "deps": ["zlib"] }
   }
 }
 ```
 
-`deps` is the dependency graph (`openssl` needs `zlib`, so it is built after zlib
-and against zlib's package). The graph must be acyclic; `scripts/plan.ps1`
-validates it.
+`deps` is the dependency graph (`openssl` and `libpng` need `zlib`, so they are
+built after zlib and against zlib's package). The graph must be acyclic;
+`scripts/plan.ps1` validates it.
 
 ## Packages, versions and build numbers
 
@@ -132,14 +132,20 @@ Perl and NASM:
 
 Local builds have no plan: the version comes from `deps.json`, the build number
 from `BUILD_NUMBER` (default `0`, i.e. `zlib-1.3.2_0`, clearly not a release),
-and dependency packages from the environment or `deps.lock`. To build openssl
-against a zlib you just built locally:
+and dependency packages from the environment or, failing that, from the latest
+release of that dependency in this repository's tags — the same rule CI uses
+(run `git fetch --tags` to have them). There is no lock file: the manifest plus
+the tags are the only source of truth. To build openssl against a zlib you just
+built locally (or before zlib has any release):
 
 ```powershell
 $env:ZLIB_PKG_BASE = "$PWD\artifacts\zlib"   # directory (or URL) holding the zips
 $env:ZLIB_PKG      = 'zlib-1.3.2_0'          # package name inside it
 .\scripts\build.ps1 -Dep openssl
 ```
+
+In Docker the same two variables are passed with `-e`, using the in-container
+path `C:\src\artifacts\zlib`.
 
 ### Environment knobs
 
@@ -151,7 +157,7 @@ $env:ZLIB_PKG      = 'zlib-1.3.2_0'          # package name inside it
 | `BUILD_ROOT` | `C:\wd\<dep>` | Build tree (kept short: OpenSSL and nmake break past MAX_PATH). |
 | `BUILD_NUMBER`, `PKG_NAME` | `0`, `<dep>-<ver>_<build>` | Set by the plan in CI. |
 | `<DEP>_VERSION`, `<DEP>_URL` | from `deps.json` | Override a dependency's version / source tarball. |
-| `<DEP>_PKG_BASE`, `<DEP>_PKG` | from plan / `deps.lock` | Where to take a dependency's package from (URL or directory) and its name. |
+| `<DEP>_PKG_BASE`, `<DEP>_PKG` | from plan / release tags | Where to take a dependency's package from (URL or directory) and its name. |
 | OpenSSL: `ZLIB_MODE` | `zlib-dynamic` | `zlib-dynamic` (load `zlib.dll` at run time), `zlib` (link `zlibstatic.lib`), `none`. |
 | OpenSSL: `OPENSSLDIR`, `EXTRA_CONFIG` | `C:/Program Files/FreeSWITCH/ssl`, `no-autoload-config` | Passed to `Configure`. |
 | zlib: `EXTRA_CMAKE` | *(empty)* | Extra CMake configure arguments. |
@@ -197,3 +203,11 @@ Notes carried over from the individual builders:
   bug in `cms_cd.c`, not a packaging issue).
 - **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
+- **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which
+  compiled an unversioned tarball into `libpng16.dll`). The package keeps the
+  `libpng16` names libpng's own CMake produces on MSVC (`libpng16.dll` +
+  `libpng16.lib`, `libpng16_static.lib`, Debug postfix `d`). It is linked
+  against the zlib *import* library of the same configuration, so
+  `libpng16.dll` needs `zlib.dll` (Debug: `zlibd.dll`) at run time — the
+  packaged `libpng.props` imports `zlib.props` for that. `FreeSwitchCore` and
+  `mod_png` switch from the `ProjectReference` to importing `libpng.props`.

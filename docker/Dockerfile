@@ -14,8 +14,10 @@
 #   docker run --rm --cpus 8 --memory 8g -v ${PWD}:C:\src windows-deps -Dep openssl
 #
 # Output lands in .\artifacts\<dep>\ on the host (OUT_DIR defaults to
-# C:\src\artifacts\<dep>). Dependency packages are resolved from deps.lock or
-# from <DEP>_PKG_BASE / <DEP>_PKG environment variables; see README.md.
+# C:\src\artifacts\<dep>). Dependency packages are resolved from this
+# repository's release tags or from <DEP>_PKG_BASE / <DEP>_PKG environment
+# variables (e.g. -e ZLIB_PKG_BASE=C:\src\artifacts\zlib -e ZLIB_PKG=zlib-1.3.2_0
+# to use a zlib you just built in the same tree); see README.md.
 #
 # Requires Windows containers. The host must be able to run a Windows base image
 # of an equal-or-older build than the host (process isolation), otherwise run

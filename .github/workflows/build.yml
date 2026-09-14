@@ -56,13 +56,15 @@ jobs:
         id: plan
         shell: pwsh
         run: |
-          $a = @('-OutFile', 'plan.json', '-GitHubOutput')
+          # Hashtable splatting: named parameters (an array splat would bind positionally).
+          $a = @{ OutFile = 'plan.json'; GitHubOutput = $true }
           if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
             $sel = '${{ inputs.deps }}'.Trim()
-            if ($sel -eq 'all') { $a += '-All' }
-            else { $a += '-Changed'; $a += @($sel -split '\s*,\s*' | Where-Object { $_ }) }
+            if ($sel -eq 'all') { $a.All = $true }
+            else { $a.Changed = @($sel -split '\s*,\s*' | Where-Object { $_ }) }
           } else {
-            $a += @('-BaseRef', '${{ github.event.before }}', '-HeadRef', '${{ github.sha }}')
+            $a.BaseRef = '${{ github.event.before }}'
+            $a.HeadRef = '${{ github.sha }}'
           }
           ./scripts/plan.ps1 @a
 
@@ -91,9 +93,16 @@ jobs:
     with:
       dep: openssl
 
+  libpng:
+    needs: [plan, zlib]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(fromJSON(needs.plan.outputs.affected), 'libpng') && needs.zlib.result != 'failure' && needs.zlib.result != 'cancelled' }}
+    uses: ./.github/workflows/build-dep.yml
+    with:
+      dep: libpng
+
   # ---- publish ------------------------------------------------------------------
   publish:
-    needs: [plan, zlib, openssl]
+    needs: [plan, zlib, openssl, libpng]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.affected != '[]' && (github.event_name == 'push' || inputs.publish) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     permissions:

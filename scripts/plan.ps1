@@ -25,7 +25,7 @@
     handed over as a workflow artifact; "release" means fetch it from the GitHub
     Release `base`.
 #>
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding = $false)]   # named parameters only: an array splat must fail loudly, not misbind
 param(
     [string]$BaseRef,                 # git ref/sha to diff from (push: github.event.before)
     [string]$HeadRef = 'HEAD',        # git ref/sha to diff to
@@ -37,9 +37,9 @@ param(
     [switch]$GitHubOutput             # append affected/plan to $env:GITHUB_OUTPUT
 )
 
-$ErrorActionPreference = 'Stop'
-$RepoRoot = Split-Path -Parent $PSScriptRoot
-$manifest = Get-Content -Raw (Join-Path $RepoRoot 'deps.json') | ConvertFrom-Json
+. (Join-Path $PSScriptRoot 'common.ps1')
+$RepoRoot = Get-RepoRoot
+$manifest = Get-Manifest
 
 # Accept "a,b,c" as well as separate arguments (powershell -File passes one string).
 $Changed = @($Changed | ForEach-Object { $_ -split '\s*,\s*' } | Where-Object { $_ })
@@ -111,43 +111,27 @@ if ($BaseRef -and -not $everything) {
 if ($everything) { foreach ($n in $names) { [void]$changedSet.Add($n) } }
 
 # --- existing releases (tags) ----------------------------------------------------
-if ($null -eq $ExistingTags) {
-    $ExistingTags = @()
-    if (Test-Path (Join-Path $RepoRoot '.git')) {
-        $ExistingTags = @(& git -C $RepoRoot tag -l)
-        if ($LASTEXITCODE -ne 0) { $ExistingTags = @() }
-    }
-}
-# latest[name|version] = @{ build = N; tag = '...' }
-$latest = @{}
-foreach ($t in $ExistingTags) {
-    if ($t -match '^(?<name>.+)-v(?<ver>[0-9][^_]*)(?:_(?<build>[0-9]+))?$') {
-        $key = "$($Matches.name)|$($Matches.ver)"
-        $b = if ($Matches.build) { [int]$Matches.build } else { 0 }
-        if (-not $latest.ContainsKey($key) -or $latest[$key].build -lt $b) { $latest[$key] = @{ build = $b; tag = $t } }
-    }
-}
+if ($null -eq $ExistingTags) { $ExistingTags = @(Get-ReleaseTags) }
 
 # --- resolve every node in topological order -------------------------------------
 $nodes = [ordered]@{}
 $affected = @()
 foreach ($n in $order) {
     $ver = [string]$manifest.deps.$n.version
-    $key = "$n|$ver"
-    $has = $latest.ContainsKey($key)
-    $isChanged = $changedSet.Contains($n) -or -not $has          # never released for this version -> must build
+    $latest = Find-LatestPackage $n $ver $ExistingTags
+    $isChanged = $changedSet.Contains($n) -or ($null -eq $latest)   # never released for this version -> must build
     $isAffected = $isChanged
     foreach ($d in @($manifest.deps.$n.deps)) { if ($nodes[$d].affected) { $isAffected = $true } }
 
     if ($isAffected) {
-        $build = if ($has) { $latest[$key].build + 1 } else { 1 }
+        $build = if ($latest) { $latest.build + 1 } else { 1 }
         $tag = "$n-v${ver}_$build"
         $pkg = "$n-${ver}_$build"
         $affected += $n
     } else {
-        $build = $latest[$key].build
-        $tag = $latest[$key].tag
-        $pkg = if ($tag -match '_[0-9]+$') { "$n-${ver}_$build" } else { "$n-$ver" }   # legacy tag without build number
+        $build = $latest.build
+        $tag = $latest.tag
+        $pkg = $latest.pkg
     }
 
     $depInfo = [ordered]@{}
@@ -157,7 +141,7 @@ foreach ($n in $order) {
             tag    = $dn.tag
             pkg    = $dn.pkg
             source = if ($dn.affected) { 'run' } else { 'release' }
-            base   = if ($dn.affected) { $null } else { "https://github.com/$Repository/releases/download/$($dn.tag)" }
+            base   = if ($dn.affected) { $null } else { Get-ReleaseBaseUrl $Repository $dn.tag }
         }
     }
     $nodes[$n] = [ordered]@{

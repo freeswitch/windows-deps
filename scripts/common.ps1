@@ -10,7 +10,8 @@
 
     Conventions shared by every dependency:
       - inputs come from environment variables (set by scripts/build.ps1 from the
-        plan or deps.lock, by `docker run -e`, or by the GitHub Actions env block);
+        plan or from release tags, by `docker run -e`, or by the GitHub Actions
+        env block);
       - a package is named <dep>-<version>_<build>, e.g. zlib-1.3.2_1: that is the
         zip prefix AND the top-level folder inside every zip;
       - a dependency package is addressed by <DEP>_PKG_BASE (URL or local
@@ -64,6 +65,35 @@ function Get-BuildSettings([string]$Dep) {
         BuildRoot = [string](Get-EnvValue 'BUILD_ROOT' "C:\wd\$Dep")
     }
 }
+
+# --- releases (tags) ----------------------------------------------------------
+# Package releases are tags '<name>-v<version>_<build>'; a legacy '<name>-v<version>'
+# counts as build 0. These helpers are the single place that knows that scheme.
+function Get-ReleaseTags {
+    if (-not (Test-Path (Join-Path $script:RepoRoot '.git'))) { return @() }
+    $tags = @(& git -C $script:RepoRoot tag -l 2>$null)
+    if ($LASTEXITCODE -ne 0) { return @() }
+    $tags
+}
+
+# Latest released package of <Name> at <Version> among $Tags, or $null.
+# Returns @{ build; tag; pkg }.
+function Find-LatestPackage([string]$Name, [string]$Version, [string[]]$Tags) {
+    $best = $null
+    foreach ($t in $Tags) {
+        if ($t -match '^(?<name>.+)-v(?<ver>[0-9][^_]*)(?:_(?<build>[0-9]+))?$') {
+            if ($Matches.name -ne $Name -or $Matches.ver -ne $Version) { continue }
+            $b = if ($Matches.build) { [int]$Matches.build } else { 0 }
+            if ($null -eq $best -or $best.build -lt $b) {
+                $pkg = if ($Matches.build) { "$Name-${Version}_$b" } else { "$Name-$Version" }
+                $best = @{ build = $b; tag = $t; pkg = $pkg }
+            }
+        }
+    }
+    $best
+}
+
+function Get-ReleaseBaseUrl([string]$Repository, [string]$Tag) { "https://github.com/$Repository/releases/download/$Tag" }
 
 # --- toolchain ----------------------------------------------------------------
 # Locates Visual Studio (vcvarsall.bat via vswhere), prepends the non-VS tool
@@ -164,7 +194,7 @@ function Get-DepPackageRoot([string]$Dep, [string]$Kind, [string]$CacheDir, [str
     $base = Get-EnvValue "${envName}_PKG_BASE"
     $pkg  = Get-EnvValue "${envName}_PKG"
     if (-not $base -or -not $pkg) {
-        throw "Dependency '$Dep' is not resolved: set ${envName}_PKG_BASE and ${envName}_PKG (scripts\build.ps1 does this from the plan or deps.lock)."
+        throw "Dependency '$Dep' is not resolved: set ${envName}_PKG_BASE and ${envName}_PKG (scripts\build.ps1 does this from the plan or from release tags)."
     }
     $zipName = switch ($Kind) {
         'headers'  { "$pkg-headers.zip" }

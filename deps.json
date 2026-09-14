@@ -10,6 +10,11 @@
       "version": "3.4.7",
       "source": "https://github.com/openssl/openssl/releases/download/openssl-{version}/openssl-{version}.tar.gz",
       "deps": ["zlib"]
+    },
+    "libpng": {
+      "version": "1.6.58",
+      "source": "https://github.com/pnggroup/libpng/archive/refs/tags/v{version}.tar.gz",
+      "deps": ["zlib"]
     }
   }
 }

@@ -22,7 +22,7 @@
     Environment (all optional): OPENSSL_VERSION, BUILD_NUMBER, PKG_NAME, CONFIGS,
     PLATFORMS, OUT_DIR, BUILD_ROOT, OPENSSL_URL, OPENSSLDIR, EXTRA_CONFIG,
     ZLIB_MODE, and ZLIB_PKG_BASE / ZLIB_PKG for the zlib package (scripts\build.ps1
-    sets those from the plan or deps.lock).
+    sets those from the plan or from release tags).
 #>
 [CmdletBinding()]
 param()

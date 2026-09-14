@@ -15,7 +15,10 @@
         scripts\build.ps1 -Dep openssl
       Version from deps.json, BUILD_NUMBER from the environment (default 0),
       dependency packages from <DEP>_PKG_BASE / <DEP>_PKG in the environment or,
-      failing that, from deps.lock.
+      failing that, from the latest release of that dependency in this
+      repository's tags (the same rule CI uses). With neither -- e.g. before the
+      first release -- build the dependency locally first and point
+      <DEP>_PKG_BASE at its artifacts directory.
 
     Everything else (CONFIGS, PLATFORMS, OUT_DIR, BUILD_ROOT and the per-dependency
     knobs) is plain environment, see README.md.
@@ -64,18 +67,21 @@ if ($Plan) {
     # Local mode: fill in whatever the environment does not already say.
     if (-not (Get-EnvValue "${envName}_VERSION")) { Set-Env "${envName}_VERSION" $node.version }
     if (-not (Get-EnvValue 'BUILD_NUMBER')) { Set-Env 'BUILD_NUMBER' '0' }
-    $lock = $null
-    $lockFile = Join-Path $repoRoot 'deps.lock'
-    if (Test-Path $lockFile) { $lock = Get-Content -Raw $lockFile | ConvertFrom-Json }
+    $tags = $null
     foreach ($d in @($node.deps)) {
         $e = ConvertTo-EnvName $d
         if ((Get-EnvValue "${e}_PKG_BASE") -and (Get-EnvValue "${e}_PKG")) { continue }
-        $entry = if ($lock) { $lock.PSObject.Properties[$d] } else { $null }
-        if (-not $entry) { throw "Cannot resolve dependency '$d' of '$Dep': set ${e}_PKG_BASE and ${e}_PKG, or add '$d' to deps.lock." }
-        $entry = $entry.Value
-        Set-Env "${e}_PKG_BASE" $entry.base
-        Set-Env "${e}_PKG"      $entry.pkg
-        Set-Env "${e}_PKG_TAG"  $entry.tag
+        if ($null -eq $tags) { $tags = @(Get-ReleaseTags) }
+        $dver = [string]$manifest.deps.$d.version
+        $hit = Find-LatestPackage $d $dver $tags
+        if (-not $hit) {
+            throw ("Cannot resolve dependency '{0}' {1} of '{2}': no release tag '{0}-v{1}_<n>' in this repository (run `git fetch --tags`?). " +
+                   "Either build it first (scripts\build.ps1 -Dep {0}) and set {3}_PKG_BASE=<its artifacts dir> {3}_PKG={0}-{1}_0, " +
+                   "or point {3}_PKG_BASE / {3}_PKG at any published package.") -f $d, $dver, $Dep, $e
+        }
+        Set-Env "${e}_PKG_BASE" (Get-ReleaseBaseUrl $manifest.repository $hit.tag)
+        Set-Env "${e}_PKG"      $hit.pkg
+        Set-Env "${e}_PKG_TAG"  $hit.tag
     }
 }
 
