@@ -51,7 +51,8 @@ function Get-BuildSettings([string]$Dep) {
     $version = ([string](Get-EnvValue "${envName}_VERSION" $node.version)).TrimStart('vV')
     $build   = [int](Get-EnvValue 'BUILD_NUMBER' '0')
     $pkg     = Get-EnvValue 'PKG_NAME' ("{0}-{1}_{2}" -f $Dep, $version, $build)
-    $source  = Get-EnvValue "${envName}_URL" (([string]$node.source) -replace '\{version\}', $version)
+    # Source URL template: {version} = 7.88.1, {version_} = 7_88_1 (curl-style tags).
+    $source  = Get-EnvValue "${envName}_URL" ((([string]$node.source) -replace '\{version_\}', ($version -replace '\.', '_')) -replace '\{version\}', $version)
     [pscustomobject]@{
         Dep       = $Dep
         Version   = $version

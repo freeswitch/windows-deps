@@ -35,17 +35,20 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "openssl": { "version": "3.4.7",  "source": "https://github.com/openssl/openssl/releases/download/openssl-{version}/openssl-{version}.tar.gz", "deps": ["zlib"] },
     "libpng":  { "version": "1.6.58", "source": "https://github.com/pnggroup/libpng/archive/refs/tags/v{version}.tar.gz",                   "deps": ["zlib"] },
     "libks":   { "version": "2.0.11", "source": "https://github.com/signalwire/libks/archive/refs/tags/v{version}.tar.gz",                  "deps": ["openssl"] },
-    "signalwire-client-c": { "version": "2.0.5", "source": "https://github.com/signalwire/signalwire-c/archive/refs/tags/v{version}.tar.gz", "deps": ["libks", "openssl"] }
+    "signalwire-client-c": { "version": "2.0.5", "source": "https://github.com/signalwire/signalwire-c/archive/refs/tags/v{version}.tar.gz", "deps": ["libks", "openssl"] },
+    "curl":    { "version": "7.88.1", "source": "https://github.com/curl/curl/releases/download/curl-{version_}/curl-{version}.tar.gz",       "deps": ["zlib", "openssl"] }
   }
 }
 ```
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`
-needs `openssl`, `signalwire-client-c` needs `libks` and `openssl`, so each is
-built after its dependencies and against their packages. The graph must be
-acyclic; `scripts/plan.ps1` validates it. Node names are the package names
-FreeSWITCH already uses (`signalwire-client-c`, not the repository name
-`signalwire-c`).
+needs `openssl`, `signalwire-client-c` needs `libks` and `openssl`, `curl` needs
+`zlib` and `openssl`, so each is built after its dependencies and against their
+packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
+names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
+the repository name `signalwire-c`). In `source`, `{version}` expands to the
+version and `{version_}` to the version with dots replaced by underscores
+(curl tags its releases `curl-7_88_1`).
 
 ## Packages, versions and build numbers
 
@@ -226,6 +229,15 @@ Notes carried over from the individual builders:
   include `<openssl/ssl.h>`, so a consumer of the libks package also needs the
   OpenSSL headers on its include path (in FreeSWITCH: import `openssl.props`
   next to `libks.props`); nothing extra is linked.
+- **curl is a static libcurl** shipped as `curl.lib` (Debug: curl's
+  `libcurl-d.lib`, renamed the same way, plus its compiler PDB), like the old
+  `curl-packaging` output. Consumers define `CURL_STATICLIB` and link OpenSSL,
+  zlib (import library, `zlib.dll` at run time) and `Wldap32.lib`; the packaged
+  `curl.props` imports `openssl.props` and `zlib.props` for that. The build
+  verifies that zlib, OpenSSL and Win32 LDAP references are present in the
+  library, i.e. that the feature set of the old packages was reproduced. The
+  version stays on the 7.88 line (7.88.1) as FreeSWITCH ships; bumping to 8.x
+  is a plain `deps.json` change.
 - **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which

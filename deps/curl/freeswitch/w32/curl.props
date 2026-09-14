@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="curl-version.props" Condition=" '$(curlVersionImported)' == '' "/>
+    <Import Project="downloadpackage.task" Condition=" '$(downloadpackagetask_Imported)' == '' " />
+    <!-- libcurl is a STATIC library built against OpenSSL and zlib: the consumer
+         links those too (openssl.props: libssl/libcrypto + system libs; zlib.props:
+         zlib.lib import library + zlib.dll copied to the output dir). -->
+    <Import Project="openssl.props" Condition=" '$(OpensslPropsImported)' == '' "/>
+    <Import Project="zlib.props" Condition=" '$(zlibImported)' == '' "/>
+  </ImportGroup>
+  <PropertyGroup>
+    <CurlPropsImported>true</CurlPropsImported>
+  </PropertyGroup>
+  <PropertyGroup>
+    <LibraryConfiguration Condition="$(Configuration.ToLower().Contains('debug'))">Debug</LibraryConfiguration>
+    <LibraryConfiguration Condition="$(Configuration.ToLower().Contains('release'))">Release</LibraryConfiguration>
+  </PropertyGroup>
+  <PropertyGroup Label="UserMacros">
+    <!-- Package name = zip prefix = folder inside the zips (build number included so a
+         rebuilt package lands in a new folder and gets picked up). -->
+    <curlPkg>curl-$(curlVersion)_$(curlBuildNumber)</curlPkg>
+    <curlLibDir>$(BaseDir)libs\$(curlPkg)</curlLibDir>
+    <curlBinDir>$(curlLibDir)\binaries\$(Platform)\$(LibraryConfiguration)</curlBinDir>
+    <!-- GitHub Release assets of freeswitch/windows-deps (tag curl-v<version>_<build>). -->
+    <curlPkgBase>https://github.com/freeswitch/windows-deps/releases/download/curl-v$(curlVersion)_$(curlBuildNumber)</curlPkgBase>
+  </PropertyGroup>
+  <!--
+       Download Target.
+       Name must be unique.
+       By design, targets are executed only once per project.
+       Usage:
+       package: URI
+       expectfileordirectory: Skips the download and extraction if exists
+       outputfolder: Folder to store a downloaded file.
+                     By default "$(BaseDir)libs", if empty
+       outputfilename: If not empty, overrides filename from URI.
+                       .exe files don't get extracted
+       extractto: Folder to extract an archive to
+   -->
+  <Target Name="curlBinariesDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(curlPkgBase)/$(curlPkg)-binaries-$(Platform.ToLower())-$(LibraryConfiguration.ToLower()).zip"
+           expectfileordirectory="$(curlBinDir)\curl.lib"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs\"
+      />
+  </Target>
+  <Target Name="curlHeadersDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(curlPkgBase)/$(curlPkg)-headers.zip"
+           expectfileordirectory="$(curlLibDir)\include\curl\curl.h"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs\"
+      />
+  </Target>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(curlLibDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>HAVE_CURL;CURL_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(curlBinDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <!-- curl.lib is the static libcurl; Wldap32 for its Win32 LDAP support. -->
+      <AdditionalDependencies>curl.lib;Wldap32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>
