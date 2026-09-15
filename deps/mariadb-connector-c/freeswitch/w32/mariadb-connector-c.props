@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="mariadb-connector-c-version.props" Condition=" '$(mariadb-connector-cVersionImported)' == '' "/>
+    <Import Project="downloadpackage.task" Condition=" '$(downloadpackagetask_Imported)' == '' " />
+  </ImportGroup>
+  <PropertyGroup>
+    <mariadb-connector-cPropsImported>true</mariadb-connector-cPropsImported>
+  </PropertyGroup>
+  <PropertyGroup Label="UserMacros">
+    <!-- Package name = zip prefix = folder inside the zips (build number included so a
+         rebuilt package lands in a new folder and gets picked up). -->
+    <mariadb-connector-cPkg>mariadb-connector-c-$(mariadb-connector-cVersion)_$(mariadb-connector-cBuildNumber)</mariadb-connector-cPkg>
+    <mariadb-connector-clibDir>$(BaseDir)libs\$(mariadb-connector-cPkg)</mariadb-connector-clibDir>
+    <!-- GitHub Release assets of freeswitch/windows-deps (tag mariadb-connector-c-v<version>_<build>). -->
+    <mariadb-connector-cPkgBase>https://github.com/freeswitch/windows-deps/releases/download/mariadb-connector-c-v$(mariadb-connector-cVersion)_$(mariadb-connector-cBuildNumber)</mariadb-connector-cPkgBase>
+  </PropertyGroup>
+
+  <!--
+       Download Target.
+       Name must be unique.
+       By design, targets are executed only once per project.
+
+       Usage:
+
+       package: URI
+
+       expectfileordirectory: Skips the download and extraction if exists
+
+       outputfolder: Folder to store a downloaded file.
+                     By default "$(BaseDir)libs", if empty
+
+       outputfilename: If not empty, overrides filename from URI.
+                       .exe files don't get extracted
+
+       extractto: Folder to extract an archive to
+   -->
+
+  <Target Name="mariadb-connector-cBinariesDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(mariadb-connector-cPkgBase)/$(mariadb-connector-cPkg)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
+           expectfileordirectory="$(mariadb-connector-clibDir)\binaries\$(Platform)\$(Configuration)\libmariadb.dll"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs\"
+      />
+  </Target>
+  <Target Name="mariadb-connector-cHeadersDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(mariadb-connector-cPkgBase)/$(mariadb-connector-cPkg)-headers.zip"
+           expectfileordirectory="$(mariadb-connector-clibDir)\include\mysql.h"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs\"
+      />
+  </Target>
+
+  <!-- libmariadb.dll goes next to FreeSWITCH.exe. The client plugins are copied as
+       well, for parity with the previous property sheet: on Windows the connector
+       ignores the plugin directory compiled into it and looks for <name>.dll where
+       mysql_options(MYSQL_PLUGIN_DIR) or the MARIADB_PLUGIN_DIR environment variable
+       point, falling back to the normal DLL search order. mod_mariadb sets neither,
+       so only the plugins built into the library (mysql_native_password among them)
+       are reachable out of the box. -->
+  <Target Name="mariadb-connector-ccopyTarget" AfterTargets="Build" DependsOnTargets="Build">
+      <ItemGroup>
+          <mariadb-connector-cFiles Include="$(mariadb-connector-clibDir)\binaries\$(Platform)\$(Configuration)\*.dll"/>
+          <libmariadb-plugins Include="$(mariadb-connector-clibDir)\binaries\$(Platform)\$(Configuration)\plugin\*.*" />
+      </ItemGroup>
+      <Copy Condition="!exists('$(BaseDir)\$(Platform)\$(Configuration)\libmariadb.dll')"
+          SourceFiles="@(mariadb-connector-cFiles)"
+          DestinationFiles="@(mariadb-connector-cFiles-&gt;'$(BaseDir)\$(Platform)\$(Configuration)\%(Filename)%(Extension)')"
+      />
+      <Copy Condition="!exists('$(BaseDir)\$(Platform)\$(Configuration)\libmariadb_plugin\caching_sha2_password.dll')"
+          SourceFiles="@(libmariadb-plugins)"
+          DestinationFolder="$(BaseDir)\$(Platform)\$(Configuration)\libmariadb_plugin\"
+      />
+  </Target>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(mariadb-connector-clibDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <!-- libmariadb.lib is the import library of libmariadb.dll. Secur32.lib is kept
+           from the previous property sheet: the connector is built against Schannel,
+           so TLS needs no OpenSSL. -->
+      <AdditionalLibraryDirectories>$(mariadb-connector-clibDir)\binaries\$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>libmariadb.lib;Secur32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

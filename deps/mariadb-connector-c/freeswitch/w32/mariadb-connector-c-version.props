@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="basedir.props" Condition=" '$(BaseDirImported)' == ''"/>
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros">
+    <!-- Release tag in freeswitch/windows-deps: mariadb-connector-c-v$(mariadb-connector-cVersion)_$(mariadb-connector-cBuildNumber) -->
+    <mariadb-connector-cVersion>3.4.9</mariadb-connector-cVersion>
+    <mariadb-connector-cBuildNumber>1</mariadb-connector-cBuildNumber>
+  </PropertyGroup>
+  <PropertyGroup>
+    <mariadb-connector-cVersionImported>true</mariadb-connector-cVersionImported>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="mariadb-connector-cVersion">
+      <Value>$(mariadb-connector-cVersion)</Value>
+    </BuildMacro>
+    <BuildMacro Include="mariadb-connector-cBuildNumber">
+      <Value>$(mariadb-connector-cBuildNumber)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

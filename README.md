@@ -40,6 +40,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "libpcap": { "version": "1.10.7", "source": "https://github.com/the-tcpdump-group/libpcap/archive/refs/tags/libpcap-{version}.tar.gz",  "deps": [] },
     "rabbitmq-c": { "version": "0.17.0", "source": "https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v{version}.tar.gz",             "deps": ["openssl"] },
     "libpq":   { "version": "17.11",  "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",     "deps": ["openssl"] },
+    "mariadb-connector-c": { "version": "3.4.9", "source": "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v{version}.tar.gz", "deps": [] },
     "lua":     { "version": "5.3.6",  "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",                                  "deps": [] }
   }
 }
@@ -47,7 +48,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap` and `lua` stand alone, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua` and `mariadb-connector-c` stand alone, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -303,6 +304,19 @@ Notes carried over from the individual builders:
   like FreeSWITCH. `CC=cl` is set for the build because Strawberry Perl puts an
   ancient `ccache` on the machine PATH, which Meson would otherwise adopt as a
   compiler launcher.
+- **mariadb-connector-c uses Schannel, not OpenSSL**, which is upstream's Windows
+  default and what the previous packages did (hence the `Secur32.lib` in
+  `mod_mariadb`'s link line), so the node depends on nothing else in the graph.
+  `WITH_CURL=OFF` drops the AWS IAM plugin and with it a libcurl dependency;
+  zlib comes from the bundled copy. The package keeps the layout the old one had:
+  `libmariadb.dll`, its import library, the static `mariadbclient.lib`, the PDB
+  and the client plugins under `plugin\`. Two things changed upstream since 3.0.9:
+  `pvio_npipe` is now linked into the library instead of being a separate plugin
+  (named pipes still work), and `client_ed25519` and `parsec` were added. The
+  headers are exactly what upstream installs, so `mysql.h` — all `mod_mariadb`
+  includes — is complete, while `mysql\client_plugin.h` still does not compile
+  with MSVC (it pulls `ma_pvio.h`, which uses `ssize_t`, and `ma_compress.h`,
+  which is not installed); that was already true of the 3.0.9 packages.
 - **lua is compiled by hand**: upstream ships no build system for Windows beyond
   the two command lines in its own notes, and FreeSWITCH used to carry a vcxproj
   for it (`libs\win32\lua\lua.2015.vcxproj`, dropped in FS-10980 when lua moved

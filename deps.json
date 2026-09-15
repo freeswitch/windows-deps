@@ -46,6 +46,11 @@
       "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",
       "deps": ["openssl"]
     },
+    "mariadb-connector-c": {
+      "version": "3.4.9",
+      "source": "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v{version}.tar.gz",
+      "deps": []
+    },
     "lua": {
       "version": "5.3.6",
       "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",
