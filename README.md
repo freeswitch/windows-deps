@@ -41,6 +41,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "rabbitmq-c": { "version": "0.17.0", "source": "https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v{version}.tar.gz",             "deps": ["openssl"] },
     "libpq":   { "version": "17.11",  "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",     "deps": ["openssl"] },
     "mariadb-connector-c": { "version": "3.4.9", "source": "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v{version}.tar.gz", "deps": [] },
+    "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
     "flite":   { "version": "2.2",    "source": "https://github.com/festvox/flite/archive/refs/tags/v{version}.tar.gz",           "deps": [] },
     "lua":     { "version": "5.3.6",  "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",                                  "deps": [] }
   }
@@ -49,7 +50,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite` and `mariadb-connector-c` stand alone, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre` and `mariadb-connector-c` stand alone, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -318,6 +319,18 @@ Notes carried over from the individual builders:
   includes — is complete, while `mysql\client_plugin.h` still does not compile
   with MSVC (it pulls `ma_pvio.h`, which uses `ssize_t`, and `ma_compress.h`,
   which is not installed); that was already true of the 3.0.9 packages.
+- **pcre is PCRE2**, kept under the name FreeSWITCH packages it as: the core's
+  `switch_regex.c` has been on the pcre2 API since the PCRE2 conversion, and the
+  packages were already 10.x. Upstream's own CMake does everything, so the
+  package is simply the install tree: `bin\` (the DLLs plus pcre2grep and
+  pcre2test), `lib\` (import and static libraries, the CMake and pkg-config
+  files) and `LICENCE.md`, with `include\` split into the headers zip. Only the
+  8 bit code unit width is built, which is what `<pcre2.h>` with
+  `PCRE2_CODE_UNIT_WIDTH 8` needs; JIT stays off, because nothing in FreeSWITCH
+  calls `pcre2_jit_compile`. The `d` postfix on Debug files (`pcre2-8d.dll`)
+  comes from upstream's CMakeLists, not from us. Note that the old
+  `pcre-packaging` repository is not the ancestor of these packages — it still
+  builds PCRE 8.34 from a hand written vcxproj.
 - **flite is compiled by hand too**, and for the same reason: its own flite.sln
   only builds the SAPI engine, so FreeSWITCH used to carry a project for the
   library (`libs\win32\flite\flite.2015.vcxproj`, dropped in FS-11086 when flite

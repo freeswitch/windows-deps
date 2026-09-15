@@ -51,6 +51,11 @@
       "source": "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v{version}.tar.gz",
       "deps": []
     },
+    "pcre": {
+      "version": "10.48",
+      "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz",
+      "deps": []
+    },
     "flite": {
       "version": "2.2",
       "source": "https://github.com/festvox/flite/archive/refs/tags/v{version}.tar.gz",
