@@ -39,14 +39,15 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "curl":    { "version": "7.88.1", "source": "https://github.com/curl/curl/releases/download/curl-{version_}/curl-{version}.tar.gz",       "deps": ["zlib", "openssl"] },
     "libpcap": { "version": "1.10.7", "source": "https://github.com/the-tcpdump-group/libpcap/archive/refs/tags/libpcap-{version}.tar.gz",  "deps": [] },
     "rabbitmq-c": { "version": "0.17.0", "source": "https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v{version}.tar.gz",             "deps": ["openssl"] },
-    "libpq":   { "version": "17.11",  "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",     "deps": ["openssl"] }
+    "libpq":   { "version": "17.11",  "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",     "deps": ["openssl"] },
+    "lua":     { "version": "5.3.6",  "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",                                  "deps": [] }
   }
 }
 ```
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap` stands alone, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap` and `lua` stand alone, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -185,6 +186,7 @@ path `C:\src\artifacts\zlib`.
 | zlib: `EXTRA_CMAKE` | *(empty)* | Extra CMake configure arguments. |
 | libpq: `PG_PREFIX` | `C:/Program Files/PostgreSQL/17` | `--prefix`; only reaches `pg_config_paths.h`, of which libpq uses `SYSCONFDIR` (where it looks for `pg_service.conf`). |
 | libpq: `EXTRA_MESON` | *(empty)* | Extra `meson setup` arguments. |
+| lua: `LUA_LIB_NAME`, `EXTRA_CFLAGS` | `lua<major><minor>`, *(empty)* | Name of the produced DLL/import library, extra `cl` flags. |
 
 `<DEP>` is the dependency name upper-cased with `-` → `_` (`RABBITMQ_C_PKG_BASE`).
 
@@ -300,7 +302,22 @@ Notes carried over from the individual builders:
   `switch_pgsql` need nothing beyond `libpq-fe.h`. Dynamic CRT (`/MD`, `/MDd`),
   like FreeSWITCH. `CC=cl` is set for the build because Strawberry Perl puts an
   ancient `ccache` on the machine PATH, which Meson would otherwise adopt as a
-  compiler launcher.- **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
+  compiler launcher.
+- **lua is compiled by hand**: upstream ships no build system for Windows beyond
+  the two command lines in its own notes, and FreeSWITCH used to carry a vcxproj
+  for it (`libs\win32\lua\lua.2015.vcxproj`, dropped in FS-10980 when lua moved
+  to precompiled binaries). `deps/lua/build.ps1` does the same with `cl` and
+  `link` directly: every `src\*.c` except the `lua.c` / `luac.c` front ends,
+  `LUA_BUILD_AS_DLL` (which is what marks the API `__declspec(dllexport)`, so no
+  .def file is needed), dynamic CRT, into `lua53.dll` + `lua53.lib`, plus
+  `lua53.pdb` in Debug. Both tools get their file lists through response files,
+  because `link.exe` does not expand wildcards. The source is the release tarball
+  from lua.org, not the github.com/lua/lua tag archive: that one is the
+  development mirror, it keeps the sources at the top level, carries the test
+  suite, and has no `lua.hpp` — which the packages have always shipped (the
+  script generates it when a source archive lacks it). `lua.exe` and `luac.exe`
+  are not built, as before.
+- **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which
   compiled an unversioned tarball into `libpng16.dll`). The package keeps the

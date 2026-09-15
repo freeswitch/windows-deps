@@ -45,6 +45,11 @@
       "version": "17.11",
       "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",
       "deps": ["openssl"]
+    },
+    "lua": {
+      "version": "5.3.6",
+      "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",
+      "deps": []
     }
   }
 }

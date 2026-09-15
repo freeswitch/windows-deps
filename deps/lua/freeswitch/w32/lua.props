@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets">
+    <Import Project="lua-version.props" Condition=" '$(LuaVersionImported)' == '' "/>
+    <Import Project="downloadpackage.task" Condition=" '$(downloadpackagetask_Imported)' == '' " />
+  </ImportGroup>
+
+  <PropertyGroup Label="UserMacros">
+    <!-- Package name = zip prefix = folder inside the zips (build number included so a
+         rebuilt package lands in a new folder and gets picked up). -->
+    <LuaPkg>lua-$(LuaVersion)_$(LuaBuildNumber)</LuaPkg>
+    <LuaLibDir>$(SolutionDir)libs\$(LuaPkg)</LuaLibDir>
+    <!-- GitHub Release assets of freeswitch/windows-deps (tag lua-v<version>_<build>). -->
+    <LuaPkgBase>https://github.com/freeswitch/windows-deps/releases/download/lua-v$(LuaVersion)_$(LuaBuildNumber)</LuaPkgBase>
+  </PropertyGroup>
+
+  <!--
+       Download Target.
+       Name must be unique.
+       By design, targets are executed only once per project.
+
+       Usage:
+
+       package: URI
+
+       expectfileordirectory: Skips the download and extraction if exists
+
+       outputfolder: Folder to store a downloaded file.
+                     By default "$(BaseDir)libs", if empty
+
+       outputfilename: If not empty, overrides filename from URI.
+                       .exe files don't get extracted
+
+       extractto: Folder to extract an archive to
+   -->
+
+  <Target Name="luaBinariesDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(LuaPkgBase)/$(LuaPkg)-binaries-$(Platform.ToLower())-$(Configuration.ToLower()).zip"
+           expectfileordirectory="$(LuaLibDir)\binaries\$(Platform)\$(Configuration)\lua53.dll"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs\"
+      />
+  </Target>
+  <Target Name="luaHeadersDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
+      <DownloadPackageTask
+           package="$(LuaPkgBase)/$(LuaPkg)-headers.zip"
+           expectfileordirectory="$(LuaLibDir)\include\lua.h"
+           outputfolder=""
+           outputfilename=""
+           extractto="$(BaseDir)libs\"
+      />
+  </Target>
+  <Target Name="luacopyTarget" BeforeTargets="CustomBuild" DependsOnTargets="luaBinariesDownloadTarget">
+        <Message Text="Copying lua libraries to the freeswitch output folder." Importance="High" />
+        <ItemGroup>
+             <luaFiles Include="$(LuaLibDir)\binaries\$(Platform)\$(Configuration)\*.dll"/>
+        </ItemGroup>
+        <Copy Condition="!exists('$(BaseDir)\$(Platform)\$(Configuration)\lua53.dll')"
+            SourceFiles="@(luaFiles)"
+            DestinationFiles="@(luaFiles->'$(BaseDir)\$(Platform)\$(Configuration)\%(Filename)%(Extension)')"
+        />
+  </Target>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(LuaLibDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <!-- Import library of lua53.dll; the name follows the 5.3 line, as upstream's
+           own Windows build does. -->
+      <AdditionalLibraryDirectories>$(LuaLibDir)\binaries\$(Platform)\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>lua53.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>
