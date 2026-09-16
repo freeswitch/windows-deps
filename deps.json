@@ -51,6 +51,11 @@
       "source": "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v{version}.tar.gz",
       "deps": []
     },
+    "opencv": {
+      "version": "4.10.0",
+      "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",
+      "deps": []
+    },
     "pcre": {
       "version": "10.48",
       "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz",

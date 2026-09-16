@@ -150,7 +150,11 @@ function Get-RemoteFile([string]$Source, [string]$OutFile) {
     if ($Source -match '^https?://') {
         Write-Host "Downloading $Source ..."
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $Source -OutFile $OutFile -UseBasicParsing
+        # Windows PowerShell renders a progress bar for every buffer it writes, which
+        # costs more than the transfer itself on a large tarball (OpenCV's is ~90 MB).
+        $prev = $ProgressPreference
+        $ProgressPreference = 'SilentlyContinue'
+        try { Invoke-WebRequest -Uri $Source -OutFile $OutFile -UseBasicParsing } finally { $ProgressPreference = $prev }
     } else {
         Write-Host "Copying $Source ..."
         Copy-Item -LiteralPath $Source -Destination $OutFile -Force

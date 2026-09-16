@@ -41,6 +41,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "rabbitmq-c": { "version": "0.17.0", "source": "https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v{version}.tar.gz",             "deps": ["openssl"] },
     "libpq":   { "version": "17.11",  "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",     "deps": ["openssl"] },
     "mariadb-connector-c": { "version": "3.4.9", "source": "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v{version}.tar.gz", "deps": [] },
+    "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
     "flite":   { "version": "2.2",    "source": "https://github.com/festvox/flite/archive/refs/tags/v{version}.tar.gz",           "deps": [] },
     "lua":     { "version": "5.3.6",  "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",                                  "deps": [] }
@@ -50,7 +51,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre` and `mariadb-connector-c` stand alone, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv` and `mariadb-connector-c` stand alone, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -319,6 +320,25 @@ Notes carried over from the individual builders:
   includes — is complete, while `mysql\client_plugin.h` still does not compile
   with MSVC (it pulls `ma_pvio.h`, which uses `ssize_t`, and `ma_compress.h`,
   which is not installed); that was already true of the 3.0.9 packages.
+- **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
+  library and the whole include tree, exactly the shape the 3.4.1 packages had.
+  The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a
+  few pieces of the legacy C API: 4.x keeps `IplImage`, `cvCreateImage`,
+  `cvReleaseImage`, `cvPoint`, `cvSize` in `core\core_c.h` and `core\types_c.h`,
+  and still ships `highgui\highgui_c.h`. What 4.x does drop is the old
+  `include\opencv\` directory, so `opencv.props` expects
+  `include\opencv2\opencv.hpp` and no longer puts `include\opencv\` on the
+  include path. The library name carries the version (`opencv_world341` becomes
+  `opencv_world4100`), which is the other line the property sheet has to follow.
+  Nothing is downloaded while building: IPP and FFmpeg both fetch prebuilt
+  binaries from `opencv_3rdparty` at configure time, so both are off; bindings,
+  tests, apps and samples are off too, and so is `gapi`, which did not exist in
+  the packages this replaces. The video capture backends are off as well
+  (`WITH_MSMF`, `WITH_DSHOW`, `WITH_DIRECTX`, and `WITH_OBSENSOR`, which reaches
+  for Media Foundation on its own): FreeSWITCH hands mod_cv its own frames and
+  never opens a capture device, and without them the DLL no longer depends on
+  Media Foundation or Direct3D, so it also loads on Server Core. The 3.4.1
+  packages had the same problem through the Video for Windows backend.
 - **pcre is PCRE2**, kept under the name FreeSWITCH packages it as: the core's
   `switch_regex.c` has been on the pcre2 API since the PCRE2 conversion, and the
   packages were already 10.x. Upstream's own CMake does everything, so the
