@@ -43,6 +43,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "mariadb-connector-c": { "version": "3.4.9", "source": "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v{version}.tar.gz", "deps": [] },
     "g722_1":  { "version": "0.2.0",  "source": "https://github.com/freeswitch/libg7221/archive/refs/tags/v{version}.tar.gz",        "deps": [] },
     "ilbc":    { "version": "0.0.1",  "source": "https://github.com/freeswitch/libilbc/archive/refs/tags/v{version}.tar.gz",         "deps": [] },
+    "libsilk": { "version": "1.0.9",  "source": "https://github.com/freeswitch/libsilk/archive/refs/tags/v{version}.tar.gz",         "deps": [] },
     "broadvoice": { "version": "0.1.0", "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",  "deps": [] },
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
@@ -54,7 +55,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc` and `mariadb-connector-c` stand alone, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk` and `mariadb-connector-c` stand alone, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -363,6 +364,23 @@ Notes carried over from the individual builders:
   puts both `include\` and `include\ilbc\` on the include path, because
   `mod_ilbc` writes `#include "ilbc.h"`. Both modes it registers are checked:
   20 ms / 160 samples / 38 bytes and 30 ms / 240 samples / 50 bytes.
+- **libsilk is the last of the in tree codec builds**, and the only one that
+  also moves version: the tree pinned 1.0.8, the node packages the 1.0.9
+  release of `freeswitch/libsilk`. `w32\download_libsilk.props` fetched the
+  tarball from files.freeswitch.org and
+  `libs\win32\libsilk\Silk_FIX.2017.vcxproj` compiled it; the node compiles
+  upstream's `libSKP_SILK_SDK_la_SOURCES` from `Makefile.am`, the same 109
+  files that project listed -- 1.0.9 only renamed
+  `SKP_Silk_apply_sine_window_new.c` back to `SKP_Silk_apply_sine_window.c`.
+  The static library is called `libsilk.lib` after the package, where the in
+  tree project called it `Silk_FIX.lib`; nothing links it by the old name any
+  more, `libsilk.props` names it. The headers are upstream's
+  `library_include_HEADERS` under `include\silk\`, the four `interface\`
+  headers `mod_silk` compiles against plus the `src\` headers upstream
+  installs beside them, and the sheet puts both `include\` and
+  `include\silk\` on the include path for its `#include
+  "SKP_Silk_SDK_API.h"`. The consumer test checks
+  `SKP_Silk_SDK_get_version()` against the manifest.
 - **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
   library and the whole include tree, exactly the shape the 3.4.1 packages had.
   The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a
