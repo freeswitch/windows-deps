@@ -42,6 +42,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "libpq":   { "version": "17.11",  "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",     "deps": ["openssl"] },
     "mariadb-connector-c": { "version": "3.4.9", "source": "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v{version}.tar.gz", "deps": [] },
     "g722_1":  { "version": "0.2.0",  "source": "https://github.com/freeswitch/libg7221/archive/refs/tags/v{version}.tar.gz",        "deps": [] },
+    "ilbc":    { "version": "0.0.1",  "source": "https://github.com/freeswitch/libilbc/archive/refs/tags/v{version}.tar.gz",         "deps": [] },
     "broadvoice": { "version": "0.1.0", "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",  "deps": [] },
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
@@ -53,7 +54,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1` and `mariadb-connector-c` stand alone, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc` and `mariadb-connector-c` stand alone, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -350,6 +351,18 @@ Notes carried over from the individual builders:
   on Windows. One upstream quirk: `g722_1_encode_release()` is a bare `free(s)`,
   so it may only be called on a state `g722_1_encode_init()` allocated;
   `mod_siren` keeps the state in its own struct and never calls it.
+- **ilbc is the same story.** `w32\download_iLBC.props` fetched
+  `ilbc-<version>.tar.gz` from files.freeswitch.org and
+  `libs\win32\ilbc\libilbc.2017.vcxproj` compiled it; this node runs that
+  compilation on the GitHub release of `freeswitch/libilbc` and ships the
+  static `libilbc.lib`. The file list is upstream's `libilbc_la_SOURCES` from
+  `src\Makefile.am`; its `WIN32SOURCES` also names `msvc\gettimeofday.c`, but
+  nothing in the codec calls it and the in tree project left it out, so this
+  node does too rather than put a second `gettimeofday` into the link. The
+  public header declares nothing platform specific either, and `ilbc.props`
+  puts both `include\` and `include\ilbc\` on the include path, because
+  `mod_ilbc` writes `#include "ilbc.h"`. Both modes it registers are checked:
+  20 ms / 160 samples / 38 bytes and 30 ms / 240 samples / 50 bytes.
 - **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
   library and the whole include tree, exactly the shape the 3.4.1 packages had.
   The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a

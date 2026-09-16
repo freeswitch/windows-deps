@@ -56,6 +56,11 @@
       "source": "https://github.com/freeswitch/libg7221/archive/refs/tags/v{version}.tar.gz",
       "deps": []
     },
+    "ilbc": {
+      "version": "0.0.1",
+      "source": "https://github.com/freeswitch/libilbc/archive/refs/tags/v{version}.tar.gz",
+      "deps": []
+    },
     "broadvoice": {
       "version": "0.1.0",
       "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",
