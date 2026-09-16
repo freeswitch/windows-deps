@@ -51,6 +51,11 @@
       "source": "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v{version}.tar.gz",
       "deps": []
     },
+    "g722_1": {
+      "version": "0.2.0",
+      "source": "https://github.com/freeswitch/libg7221/archive/refs/tags/v{version}.tar.gz",
+      "deps": []
+    },
     "broadvoice": {
       "version": "0.1.0",
       "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",
