@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <broadvoice_Version>0.1.0</broadvoice_Version>
+    <broadvoice_BuildNumber>1</broadvoice_BuildNumber>
+  </PropertyGroup>
+  <PropertyGroup>
+    <broadvoice_VersionImported>true</broadvoice_VersionImported>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="broadvoice_Version">
+      <Value>$(broadvoice_Version)</Value>
+    </BuildMacro>
+    <BuildMacro Include="broadvoice_BuildNumber">
+      <Value>$(broadvoice_BuildNumber)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

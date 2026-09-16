@@ -51,6 +51,11 @@
       "source": "https://github.com/mariadb-corporation/mariadb-connector-c/archive/refs/tags/v{version}.tar.gz",
       "deps": []
     },
+    "broadvoice": {
+      "version": "0.1.0",
+      "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",
+      "deps": []
+    },
     "opencv": {
       "version": "4.10.0",
       "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",
