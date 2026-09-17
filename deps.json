@@ -71,6 +71,11 @@
       "source": "https://gitlab.com/libtiff/libtiff/-/archive/v{version}/libtiff-v{version}.tar.gz",
       "deps": []
     },
+    "lame": {
+      "version": "3.101",
+      "source": "https://downloads.sourceforge.net/project/lame/lame/{version}/lame-{version}.tar.gz",
+      "deps": []
+    },
     "broadvoice": {
       "version": "0.1.0",
       "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",

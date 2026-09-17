@@ -154,12 +154,20 @@ function Get-RemoteFile([string]$Source, [string]$OutFile) {
         # costs more than the transfer itself on a large tarball (OpenCV's is ~90 MB).
         $prev = $ProgressPreference
         $ProgressPreference = 'SilentlyContinue'
-        try { Invoke-WebRequest -Uri $Source -OutFile $OutFile -UseBasicParsing } finally { $ProgressPreference = $prev }
+        # Windows PowerShell sends a browser-like user agent by default, which makes
+        # SourceForge answer with a Cloudflare challenge page instead of the file; any
+        # plain non-browser agent gets the download.
+        $ua = 'windows-deps/1.0 (+https://github.com/freeswitch/windows-deps)'
+        try { Invoke-WebRequest -Uri $Source -OutFile $OutFile -UseBasicParsing -UserAgent $ua } finally { $ProgressPreference = $prev }
     } else {
         Write-Host "Copying $Source ..."
         Copy-Item -LiteralPath $Source -Destination $OutFile -Force
     }
     if (-not (Test-Path $OutFile)) { throw "Failed to fetch '$Source'." }
+    # A mirror answering with an HTML page instead of the archive otherwise fails
+    # much later, and much more confusingly, inside the extractor.
+    $head = [System.Text.Encoding]::ASCII.GetString(([System.IO.File]::ReadAllBytes($OutFile) | Select-Object -First 16))
+    if ($head -match '^\s*<(!doctype|html)') { throw "'$Source' answered with an HTML page, not a file." }
     Write-Host ("  -> {0:N0} bytes" -f (Get-Item $OutFile).Length)
 }
 

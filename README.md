@@ -45,6 +45,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "ilbc":    { "version": "0.0.1",  "source": "https://github.com/freeswitch/libilbc/archive/refs/tags/v{version}.tar.gz",         "deps": [] },
     "libsilk": { "version": "1.0.9",  "source": "https://github.com/freeswitch/libsilk/archive/refs/tags/v{version}.tar.gz",         "deps": [] },
     "libtiff": { "version": "4.7.2",  "source": "https://gitlab.com/libtiff/libtiff/-/archive/v{version}/libtiff-v{version}.tar.gz",  "deps": [] },
+    "lame":    { "version": "3.101",  "source": "https://downloads.sourceforge.net/project/lame/lame/{version}/lame-{version}.tar.gz",  "deps": [] },
     "broadvoice": { "version": "0.1.0", "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",  "deps": [] },
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
@@ -56,7 +57,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff` and `mariadb-connector-c` stand alone, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame` and `mariadb-connector-c` stand alone, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -399,6 +400,25 @@ Notes carried over from the individual builders:
   test is spandsp's fax path: the same 12 TIFF-FX fields `t4_tx.c` registers
   through `TIFFSetTagExtender` / `TIFFMergeFieldInfo`, then a G4 page written
   and read back row by row.
+- **lame moves 3.98.4 to 3.101** and is the first node served by SourceForge.
+  `w32\download_LAME.props` fetched `lame-3.98.4-1.tar.gz` from
+  files.freeswitch.org and `libs\win32\libmp3lame\libmp3lame.2017.vcxproj`
+  compiled it against a copy of LAME's own `configMS.h`, checked in as
+  `libs\win32\libmp3lame\config.h`; the node compiles
+  upstream's `libmp3lame_la_SOURCES` and makes that same `configMS.h` copy, the
+  step upstream's own `vc_solution\vs2019_libmp3lame.vcxproj` performs. No NASM
+  assembly and no mpglib decoder: `mod_shout` only encodes with LAME and decodes
+  through mpg123, so `mpglib_interface.c` compiles to nothing without
+  `HAVE_MPGLIB`, as before. The one file the old list did not need is
+  `vector\xmm_quantize_sub.c`: on x64 `configMS.h` defines `HAVE_XMMINTRIN_H`,
+  and `quantize.c` then refers to `init_xrpow_core_sse`, so it comes in from
+  upstream's `xmm_sources`, which its MSVC project compiles for the same reason.
+  Two notes on fetching: SourceForge answers a browser-like user agent with a
+  Cloudflare challenge page instead of the file, so `Get-RemoteFile` now sends a
+  plain one and rejects an HTML body outright; and `mod_shout` includes
+  `<lame.h>` on Windows but `<lame/lame.h>` elsewhere, so the header keeps
+  upstream's `include\lame\` layout and `lame.props` puts both directories on
+  the include path.
 - **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
   library and the whole include tree, exactly the shape the 3.4.1 packages had.
   The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a
