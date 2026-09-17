@@ -48,6 +48,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "lame":    { "version": "3.101",  "source": "https://downloads.sourceforge.net/project/lame/lame/{version}/lame-{version}.tar.gz",  "deps": [] },
     "libogg":  { "version": "1.3.6",  "source": "https://downloads.xiph.org/releases/ogg/libogg-{version}.tar.gz",                     "deps": [] },
     "pthreads": { "version": "2.9.1", "source": "https://github.com/freeswitch/windows-deps/releases/download/pthreads-w32-2-9-1-release/pthreads-w32-2-9-1.tar.gz", "deps": [] },
+    "libshout": { "version": "2.4.6", "source": "https://downloads.xiph.org/releases/libshout/libshout-{version}.tar.gz",   "deps": ["libogg", "pthreads"] },
     "broadvoice": { "version": "0.1.0", "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",  "deps": [] },
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
@@ -59,7 +60,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads` and `mariadb-connector-c` stand alone, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -444,6 +445,26 @@ Notes carried over from the individual builders:
   than cross-checking it against the manifest.
   `pthreads.props` also defines `_TIMESPEC_DEFINED`, which every consumer in
   the tree defines by hand today.
+- **libshout is the one node that patches what it builds.** 2.4.6 has no
+  Windows build at all -- `win32\` holds a Visual C++ 6 project and nothing
+  else -- so the node supplies what configure would: a `config.h` written here
+  (Winsock2, getaddrinfo, `HAVE_OGG`, `HAVE_PTHREAD`, the `LIBSHOUT_*` version
+  macros `shout_version()` needs) and `include\shout\shout.h` generated from
+  upstream's `shout.h.in`. Three headers MSVC lacks are shimmed: `compat.h`,
+  which `sock.h` takes in place of `<unistd.h>`, `<strings.h>` and
+  `<sys/select.h>`. `HAVE_INET_PTON` is deliberately not set: with it `sock.h`
+  turns its own `inet_aton` prototype into a macro expansion that does not
+  parse, and `sock.c` implements `inet_aton` for Windows anyway.
+  `common\httpp\encoding.c` is left out -- Icecast server side code no part of
+  libshout calls, which also does arithmetic on `void *`. That same GCC
+  extension appears once in `format_webm.c`, and there it cannot be left out
+  (`shout.c` calls `shout_open_webm()` unconditionally), so `patches\` carries a
+  two cast diff for it; `patch` fails the build if the hunk stops applying,
+  which is how a fix landing upstream would announce itself. The package also
+  ships `include\os.h`, which upstream distributes but never installs, because
+  `shout.h` includes it on Windows for its MSVC typedefs. Vorbis, Theora, Speex
+  and TLS stay out, as in the in tree build; Ogg does not, so the node builds
+  against the `libogg` package, and threads stay on against `pthreads`.
 - **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
   library and the whole include tree, exactly the shape the 3.4.1 packages had.
   The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a
