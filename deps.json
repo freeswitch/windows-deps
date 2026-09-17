@@ -91,6 +91,11 @@
       "source": "https://downloads.xiph.org/releases/libshout/libshout-{version}.tar.gz",
       "deps": ["libogg", "pthreads"]
     },
+    "mpg123": {
+      "version": "1.33.7",
+      "source": "https://www.mpg123.de/download/mpg123-{version}.tar.bz2",
+      "deps": []
+    },
     "broadvoice": {
       "version": "0.1.0",
       "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",

@@ -49,6 +49,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "libogg":  { "version": "1.3.6",  "source": "https://downloads.xiph.org/releases/ogg/libogg-{version}.tar.gz",                     "deps": [] },
     "pthreads": { "version": "2.9.1", "source": "https://github.com/freeswitch/windows-deps/releases/download/pthreads-w32-2-9-1-release/pthreads-w32-2-9-1.tar.gz", "deps": [] },
     "libshout": { "version": "2.4.6", "source": "https://downloads.xiph.org/releases/libshout/libshout-{version}.tar.gz",   "deps": ["libogg", "pthreads"] },
+    "mpg123":  { "version": "1.33.7", "source": "https://www.mpg123.de/download/mpg123-{version}.tar.bz2",                "deps": [] },
     "broadvoice": { "version": "0.1.0", "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",  "deps": [] },
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
@@ -60,7 +61,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -465,6 +466,22 @@ Notes carried over from the individual builders:
   `shout.h` includes it on Windows for its MSVC typedefs. Vorbis, Theora, Speex
   and TLS stay out, as in the in tree build; Ogg does not, so the node builds
   against the `libogg` package, and threads stay on against `pthreads`.
+- **mpg123 moves 1.14.4 to 1.33.7 and loses its MSVC project.**
+  `w32\download_mpg123.props` fetched the 2012 tarball from
+  files.freeswitch.org, renamed the directory to `libs\libmpg123`, and
+  `libs\win32\mpg123\libmpg123.2017.vcxproj` compiled a hand kept source list
+  against a `config.h` and an `mpg123.h` checked into the tree, plus
+  `ports\MSVC++\msvc.c` from the tarball. 1.33.7 has no MSVC port left --
+  `ports\README` says the contributed ones went stale and were dropped, leaving
+  `ports\cmake` -- so the node builds that, and it generates both headers
+  itself. Only the decoder goes in: `BUILD_LIBOUT123=OFF` (which also gates the
+  programs) and `BUILD_PROGRAMS=OFF`, since `mod_shout` links nothing else.
+  Worth knowing when reading the header: `mpg123_distversion()` and
+  `mpg123_libversion()` are declared without `MPG123_EXPORT` upstream, so no
+  Windows DLL exports them, this one included; `MPG123_API_VERSION` from the
+  header is what a consumer can use. The consumer test pairs this package with
+  `lame`, the way `mod_shout` does: encode a second of audio, feed it back
+  through `mpg123_open_feed` and check the format that comes out.
 - **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
   library and the whole include tree, exactly the shape the 3.4.1 packages had.
   The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a
