@@ -72,6 +72,31 @@ New-Item -ItemType Directory -Force -Path $stage | Out-Null
 $tarball = Join-Path $s.BuildRoot "mpg123-$($s.Version).tar.bz2"
 Get-RemoteFile $s.SourceUrl $tarball
 
+# Upstream ships bzip2 only. The bsdtar in Windows Server 2022's System32 stalls
+# on it, so the bzip2 layer comes off here and tar only ever sees a plain .tar.
+# 7-Zip if the machine has it (hosted runners do), otherwise Python (the
+# toolchain image has it); both are far quicker than the archive is large.
+$plainTar = [System.IO.Path]::ChangeExtension($tarball, $null).TrimEnd('.')
+if (-not (Test-Path $plainTar)) {
+    $sevenZip = @('C:\Program Files\7-Zip\7z.exe', 'C:\Program Files (x86)\7-Zip\7z.exe') |
+        Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($sevenZip) {
+        Write-Host "decompressing with $sevenZip ..."
+        & $sevenZip e -y "-o$($s.BuildRoot)" $tarball | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "7z could not decompress '$tarball'." }
+    } else {
+        $python = Get-Command python -ErrorAction SilentlyContinue
+        if (-not $python) { throw "Neither 7-Zip nor python is available to decompress '$tarball'." }
+        Write-Host "decompressing with $($python.Source) ..."
+        $code = "import bz2,shutil,sys" + [char]10 +
+                "with bz2.open(sys.argv[1]) as i, open(sys.argv[2], 'wb') as o: shutil.copyfileobj(i, o)"
+        & $python.Source -c $code $tarball $plainTar
+        if ($LASTEXITCODE -ne 0) { throw "python could not decompress '$tarball'." }
+    }
+    if (-not (Test-Path $plainTar)) { throw "Decompressing '$tarball' produced no '$plainTar'." }
+}
+Write-Host ("  -> {0:N0} bytes uncompressed" -f (Get-Item $plainTar).Length)
+
 $headerInstall = $null
 $licenseSrc    = $null
 
@@ -88,7 +113,7 @@ foreach ($plat in $s.Platforms) {
         $insDir = Join-Path $work 'install'
         New-Item -ItemType Directory -Force -Path $work | Out-Null
         Write-Host '-- extracting ...'
-        Expand-Tarball $tarball $work $tc
+        Expand-Tarball $plainTar $work $tc
         if (-not (Test-Path $srcDir)) { throw "Tarball did not expand to '$srcDir'." }
         $cmakeSrc = Join-Path $srcDir 'ports\cmake'
         if (-not (Test-Path (Join-Path $cmakeSrc 'CMakeLists.txt'))) { throw "No CMake port in '$cmakeSrc'." }
