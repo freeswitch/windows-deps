@@ -44,6 +44,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "g722_1":  { "version": "0.2.0",  "source": "https://github.com/freeswitch/libg7221/archive/refs/tags/v{version}.tar.gz",        "deps": [] },
     "ilbc":    { "version": "0.0.1",  "source": "https://github.com/freeswitch/libilbc/archive/refs/tags/v{version}.tar.gz",         "deps": [] },
     "libsilk": { "version": "1.0.9",  "source": "https://github.com/freeswitch/libsilk/archive/refs/tags/v{version}.tar.gz",         "deps": [] },
+    "libtiff": { "version": "4.7.2",  "source": "https://gitlab.com/libtiff/libtiff/-/archive/v{version}/libtiff-v{version}.tar.gz",  "deps": [] },
     "broadvoice": { "version": "0.1.0", "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",  "deps": [] },
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
@@ -55,7 +56,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk` and `mariadb-connector-c` stand alone, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff` and `mariadb-connector-c` stand alone, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -381,6 +382,23 @@ Notes carried over from the individual builders:
   `include\silk\` on the include path for its `#include
   "SKP_Silk_SDK_API.h"`. The consumer test checks
   `SKP_Silk_SDK_get_version()` against the manifest.
+- **libtiff jumps 4.0.7 to 4.7.2 and changes build system.** The tree kept a
+  hand written list of 36 sources in
+  `libs\win32\libtiff\libtiff.2017.vcxproj` and copied `tif_config.vc.h` /
+  `tiffconf.vc.h` into place before compiling; 4.7 ships neither file, so the
+  node drives upstream's CMake, which generates them. The source is the GitLab
+  archive of the `v4.7.2` tag. Codecs match what the old project defined --
+  CCITT (what fax needs), PackBits, LZW, ThunderScan, NeXT, LogLuv -- and
+  everything needing a third party library stays off: the old project compiled
+  `tif_zip.c`, `tif_jpeg.c`, `tif_ojpeg.c` and `tif_pixarlog.c` but never
+  defined `ZIP_SUPPORT` or `JPEG_SUPPORT`, so those codecs were already inert,
+  and the node needs no `zlib` edge. Upstream sets `CMAKE_DEBUG_POSTFIX` with a
+  plain `set()` that a `-D` cannot override, so the library keeps its own names
+  -- `tiff.lib` release, `tiffd.lib` debug -- and `tiff.props` selects between
+  them through `$(LibraryConfiguration)`, as `opencv.props` does. The consumer
+  test is spandsp's fax path: the same 12 TIFF-FX fields `t4_tx.c` registers
+  through `TIFFSetTagExtender` / `TIFFMergeFieldInfo`, then a G4 page written
+  and read back row by row.
 - **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
   library and the whole include tree, exactly the shape the 3.4.1 packages had.
   The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a
