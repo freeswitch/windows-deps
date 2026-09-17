@@ -47,6 +47,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "libtiff": { "version": "4.7.2",  "source": "https://gitlab.com/libtiff/libtiff/-/archive/v{version}/libtiff-v{version}.tar.gz",  "deps": [] },
     "lame":    { "version": "3.101",  "source": "https://downloads.sourceforge.net/project/lame/lame/{version}/lame-{version}.tar.gz",  "deps": [] },
     "libogg":  { "version": "1.3.6",  "source": "https://downloads.xiph.org/releases/ogg/libogg-{version}.tar.gz",                     "deps": [] },
+    "pthreads": { "version": "2.9.1", "source": "https://github.com/freeswitch/windows-deps/releases/download/pthreads-w32-2-9-1-release/pthreads-w32-2-9-1.tar.gz", "deps": [] },
     "broadvoice": { "version": "0.1.0", "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",  "deps": [] },
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
@@ -58,7 +59,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg` and `mariadb-connector-c` stand alone, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads` and `mariadb-connector-c` stand alone, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -426,6 +427,23 @@ Notes carried over from the individual builders:
   upstream's own CMake project, which also generates `ogg\config_types.h` -- the
   header that build had to supply by hand. Static `ogg.lib`, nothing else: no
   docs, no pkg-config or CMake package files.
+- **pthreads-w32 is the one node whose source this repository hosts itself.**
+  Upstream released 2.9.1 in 2012 and has been dormant since; the tarball is
+  mirrored as a release asset here so the build does not depend on
+  sourceware.org staying up, and the manifest points at that copy.
+  `w32\download_pthreads.props` fetched the same tarball from
+  files.freeswitch.org and `libs\win32\pthread\pthread.2017.vcxproj` compiled
+  it; the solution maps that project to its "Release DLL" / "Debug DLL"
+  configurations, so the node builds the DLL and its import library, keeping
+  the names that project produced -- `pthread.dll` and `pthread.lib`.
+  The mirrored tarball is the snapshot FreeSWITCH has been building all along,
+  byte for byte; its `config.h` defines `PTW32_BUILD` itself, so the DLL
+  exports its 120 entry points without the command line having to say so. It is
+  CVS between releases: everything names it 2.9.1 and `pthread.h` already says
+  `PTW32_VERSION 2,10,0,0`, so the node reports what the header declares rather
+  than cross-checking it against the manifest.
+  `pthreads.props` also defines `_TIMESPEC_DEFINED`, which every consumer in
+  the tree defines by hand today.
 - **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
   library and the whole include tree, exactly the shape the 3.4.1 packages had.
   The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a

@@ -81,6 +81,11 @@
       "source": "https://downloads.xiph.org/releases/ogg/libogg-{version}.tar.gz",
       "deps": []
     },
+    "pthreads": {
+      "version": "2.9.1",
+      "source": "https://github.com/freeswitch/windows-deps/releases/download/pthreads-w32-2-9-1-release/pthreads-w32-2-9-1.tar.gz",
+      "deps": []
+    },
     "broadvoice": {
       "version": "0.1.0",
       "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",
