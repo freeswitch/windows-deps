@@ -56,6 +56,14 @@ Write-Host " Build root      : $($s.BuildRoot)"
 Write-Host " Output dir      : $($s.OutDir)"
 Write-Host "==================================================================="
 
+# Which tools actually got picked matters on a hosted runner, where the PATH is
+# not ours: name them before anything long starts.
+foreach ($t in 'cmake', 'nmake', 'ml64', 'nasm', 'tar') {
+    $c = Get-Command $t -ErrorAction SilentlyContinue
+    Write-Host ("  {0,-6} {1}" -f $t, $(if ($c) { $c.Source } else { "(not on PATH)" }))
+}
+Write-Host ("  tar in use: {0}" -f $tc.Tar)
+
 Reset-Directory $s.BuildRoot
 New-Item -ItemType Directory -Force -Path $s.OutDir | Out-Null
 $stage = Join-Path $s.BuildRoot 'stage'
@@ -79,18 +87,21 @@ foreach ($plat in $s.Platforms) {
         $bldDir = Join-Path $work 'build'
         $insDir = Join-Path $work 'install'
         New-Item -ItemType Directory -Force -Path $work | Out-Null
+        Write-Host '-- extracting ...'
         Expand-Tarball $tarball $work $tc
         if (-not (Test-Path $srcDir)) { throw "Tarball did not expand to '$srcDir'." }
         $cmakeSrc = Join-Path $srcDir 'ports\cmake'
         if (-not (Test-Path (Join-Path $cmakeSrc 'CMakeLists.txt'))) { throw "No CMake port in '$cmakeSrc'." }
 
-        # The version upstream's configure.ac declares must match the manifest.
-        $ac = Get-Content (Join-Path $srcDir 'configure.ac') -Raw -ErrorAction SilentlyContinue
-        if ($ac -and $ac -match 'AC_INIT\(\[mpg123\],\s*\[([0-9][0-9.]*)\]') {
-            if ($Matches[1] -ne $s.Version) { throw "mpg123 source declares version $($Matches[1]) but deps.json says $($s.Version)." }
-        } else {
-            Write-Host "WARNING: could not read the version from configure.ac, not cross-checked."
+        # src\version.h is where the version lives -- configure.ac only assembles it
+        # from m4 macros, and the CMake port reads this same header.
+        $vh = Get-Content (Join-Path $srcDir 'src\version.h') -Raw
+        $parts = foreach ($m in 'MAJOR', 'MINOR', 'PATCH') {
+            if ($vh -notmatch "#define\s+MPG123_$m\s+(\d+)") { throw "No MPG123_$m in src\version.h." }
+            $Matches[1]
         }
+        $sourceVersion = $parts -join '.'
+        if ($sourceVersion -ne $s.Version) { throw "mpg123 source declares version $sourceVersion but deps.json says $($s.Version)." }
 
         # The decoder only, as a DLL: the in tree build was a DLL too, and mod_shout
         # uses nothing else from this package.
@@ -106,15 +117,23 @@ foreach ($plat in $s.Platforms) {
         )
         if ($extraCMake) { $configureArgs += $extraCMake }
 
-        $bat = @"
+        # One phase per batch: each prints its output when it ends, so a stall is
+        # visible at the phase that never reported.
+        $phases = @(
+            @{ name = 'configure'; cmd = "cmake $($configureArgs -join ' ')" },
+            @{ name = 'build';     cmd = "cmake --build `"$bldDir`"" },
+            @{ name = 'install';   cmd = "cmake --install `"$bldDir`"" }
+        )
+        foreach ($phase in $phases) {
+            Write-Host "-- $($phase.name) ..."
+            $bat = @"
 @echo on
 call "$($tc.VcVarsAll)" $vcArch || exit /b 1
-cmake $($configureArgs -join ' ') || exit /b 1
-cmake --build "$bldDir" || exit /b 1
-cmake --install "$bldDir" || exit /b 1
+$($phase.cmd) || exit /b 1
 "@
-        $log = Join-Path $s.OutDir "build-$plat-$config.log"
-        Invoke-BuildBatch -Script $bat -BatchFile (Join-Path $work 'build.bat') -LogFile $log -Label "mpg123 build [$plat/$config]"
+            $log = Join-Path $s.OutDir "build-$plat-$config-$($phase.name).log"
+            Invoke-BuildBatch -Script $bat -BatchFile (Join-Path $work "$($phase.name).bat") -LogFile $log -Label "mpg123 $($phase.name) [$plat/$config]"
+        }
 
         # --- verify --------------------------------------------------------------
         $dll = Join-Path $insDir 'bin\mpg123.dll'
