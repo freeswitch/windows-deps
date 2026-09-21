@@ -50,6 +50,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "pthreads": { "version": "2.9.1", "source": "https://github.com/freeswitch/windows-deps/releases/download/pthreads-w32-2-9-1-release/pthreads-w32-2-9-1.tar.gz", "deps": [] },
     "libshout": { "version": "2.4.6", "source": "https://downloads.xiph.org/releases/libshout/libshout-{version}.tar.gz",   "deps": ["libogg", "pthreads"] },
     "mpg123":  { "version": "1.33.7", "source": "https://www.mpg123.de/download/mpg123-{version}.tar.bz2",                "deps": [] },
+    "sqlite":  { "version": "3.53.4", "source": "https://github.com/sqlite/sqlite/archive/refs/tags/version-{version}.tar.gz", "deps": [] },
     "broadvoice": { "version": "0.1.0", "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",  "deps": [] },
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
@@ -61,7 +62,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -482,6 +483,19 @@ Notes carried over from the individual builders:
   header is what a consumer can use. The consumer test pairs this package with
   `lame`, the way `mod_shout` does: encode a second of audio, feed it back
   through `mpg123_open_feed` and check the format that comes out.
+- **sqlite generates its own amalgamation.** The source is the tag archive of
+  `github.com/sqlite/sqlite`, and `sqlite3.c` is made from it as an intermediate
+  step -- `nmake /f Makefile.msc sqlite3.c`, the build sqlite.org's own
+  `doc/compile-for-windows.md` describes. No TCL has to be installed for it: the
+  tree compiles `autosetup\jimsh0.c` into a `jimsh0.exe` of its own and runs its
+  generators with that, which takes about fifteen seconds. `sqlite3.h` and
+  `sqlite3ext.h` come out of the same step, so the headers package is generated
+  too, and the build checks the `SQLITE_VERSION` that header declares against
+  the manifest.
+  The library is then compiled the way the tree compiled it -- `/MD`,
+  `THREADSAFE=1`, `SQLITE_DEBUG` in debug -- into a static `sqlite3.lib`, which
+  is what the solution maps `libs\win32\sqlite\sqlite.2017.vcxproj` to for both
+  Debug and Release.
 - **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
   library and the whole include tree, exactly the shape the 3.4.1 packages had.
   The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a
