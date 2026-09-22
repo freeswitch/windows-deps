@@ -1,0 +1,39 @@
+packet.h, resolver.h: take struct timeval from Winsock on Visual C++
+
+Both public headers include <sys/time.h> unconditionally for struct timeval,
+which ldns_pkt_timestamp and ldns_resolver_timeout carry in their prototypes.
+The Windows SDK has no <sys/time.h>; Winsock's <winsock2.h> is where the type
+lives there. Without this every consumer of <ldns/ldns.h> fails to compile,
+because the header is what it includes.
+
+Upstream's own Windows build cross compiles with mingw, whose headers do have
+<sys/time.h>, so nothing there hits this.
+
+--- a/ldns/packet.h
++++ b/ldns/packet.h
+@@ -36,7 +36,11 @@
+ #include <ldns/common.h>
+ #include <ldns/rr.h>
+ #include <ldns/edns.h>
++#ifdef _MSC_VER
++#include <winsock2.h>
++#else
+ #include <sys/time.h>
++#endif
+ 
+ #ifdef __cplusplus
+ extern "C" {
+--- a/ldns/resolver.h
++++ b/ldns/resolver.h
+@@ -26,7 +26,11 @@
+ #include <ldns/tsig.h>
+ #include <ldns/rdata.h>
+ #include <ldns/packet.h>
++#ifdef _MSC_VER
++#include <winsock2.h>
++#else
+ #include <sys/time.h>
++#endif
+ 
+ #ifdef __cplusplus
+ extern "C" {

@@ -51,6 +51,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "libshout": { "version": "2.4.6", "source": "https://downloads.xiph.org/releases/libshout/libshout-{version}.tar.gz",   "deps": ["libogg", "pthreads"] },
     "mpg123":  { "version": "1.33.7", "source": "https://www.mpg123.de/download/mpg123-{version}.tar.bz2",                "deps": [] },
     "sqlite":  { "version": "3.53.4", "source": "https://github.com/sqlite/sqlite/archive/refs/tags/version-{version}.tar.gz", "deps": [] },
+    "ldns":    { "version": "1.9.2", "source": "https://github.com/NLnetLabs/ldns/archive/refs/tags/{version}.tar.gz", "deps": [] },
     "broadvoice": { "version": "0.1.0", "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",  "deps": [] },
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
@@ -62,7 +63,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -496,6 +497,21 @@ Notes carried over from the individual builders:
   `THREADSAFE=1`, `SQLITE_DEBUG` in debug -- into a static `sqlite3.lib`, which
   is what the solution maps `libs\win32\sqlite\sqlite.2017.vcxproj` to for both
   Debug and Release.
+- **ldns is configured here**, because upstream has no Visual C++ build:
+  `makewin.sh` cross compiles with mingw, and the tag archive holds no
+  configure output. The node generates `ldns\common.h`, `ldns\net.h` and
+  `ldns\util.h` from the `.in` templates beside them -- that is where the
+  version macros and the `LDNS_BUILD_CONFIG_*` answers come from -- and writes
+  `ldns\config.h`, whose trailer is configure.ac's own `AH_BOTTOM` minus the
+  `<unistd.h>` include Visual C++ has no counterpart for. It also compiles a
+  `gettimeofday`: `net.c`, `tsig.c` and `util.c` call it unconditionally,
+  configure never checks for it, and Winsock has none.
+  OpenSSL stays out, as it was out of the in tree build that this replaces
+  (`ldns-1.6.9-2-win.tar.gz` from files.freeswitch.org, compiled by
+  `libs\win32\ldns\ldns-lib\ldns-lib.2017.vcxproj`): `LDNS_BUILD_CONFIG_HAVE_SSL`
+  is 0, so the DNSSEC, DANE and key handling compiles away. `mod_enum` asks
+  for a resolver, a query and the NAPTR records that come back, and none of
+  that touches crypto.
 - **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
   library and the whole include tree, exactly the shape the 3.4.1 packages had.
   The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a

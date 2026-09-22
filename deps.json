@@ -101,6 +101,11 @@
       "source": "https://github.com/sqlite/sqlite/archive/refs/tags/version-{version}.tar.gz",
       "deps": []
     },
+    "ldns": {
+      "version": "1.9.2",
+      "source": "https://github.com/NLnetLabs/ldns/archive/refs/tags/{version}.tar.gz",
+      "deps": []
+    },
     "broadvoice": {
       "version": "0.1.0",
       "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",
