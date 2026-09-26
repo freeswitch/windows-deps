@@ -52,6 +52,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "mpg123":  { "version": "1.33.7", "source": "https://www.mpg123.de/download/mpg123-{version}.tar.bz2",                "deps": [] },
     "sqlite":  { "version": "3.53.4", "source": "https://github.com/sqlite/sqlite/archive/refs/tags/version-{version}.tar.gz", "deps": [] },
     "ldns":    { "version": "1.9.2", "source": "https://github.com/NLnetLabs/ldns/archive/refs/tags/{version}.tar.gz", "deps": [] },
+    "speex":   { "version": "1.2.1", "source": "https://github.com/xiph/speex/archive/refs/tags/Speex-{version}.tar.gz", "deps": [] },
     "broadvoice": { "version": "0.1.0", "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",  "deps": [] },
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
@@ -63,7 +64,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns`, `speex` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -512,6 +513,16 @@ Notes carried over from the individual builders:
   is 0, so the DNSSEC, DANE and key handling compiles away. `mod_enum` asks
   for a resolver, a query and the NAPTR records that come back, and none of
   that touches crypto.
+- **speex is the codec alone.** Since 1.2.0 the resampler, preprocessor, echo
+  canceller and jitter buffer live in SpeexDSP, which FreeSWITCH builds from
+  its own sources; this package replaces only what
+  `libs\win32\speex\libspeex.2017.vcxproj` compiled out of
+  `speex-1.2rc1.tar.gz` from files.freeswitch.org. The file list is upstream's
+  `libspeex_la_SOURCES` without the optional Vorbis psychoacoustic model --
+  the set configure builds by default and the in tree project compiled -- and
+  `config.h` is upstream's `win32\config.h`. The version string is the one
+  `libspeex\arch.h` defines when configure has not, and the build checks
+  it against `configure.ac` and the manifest.
 - **opencv is a world build**, one `opencv_world<ver>.dll` plus its import
   library and the whole include tree, exactly the shape the 3.4.1 packages had.
   The jump from 3.4.1 to 4.10.0 is safe for `mod_cv` even though it still uses a
