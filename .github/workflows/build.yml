@@ -222,6 +222,12 @@ jobs:
     uses: ./.github/workflows/build-dep.yml
     with:
       dep: speex
+  libjpeg:
+    needs: [plan]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && contains(needs.plan.outputs.affected, '"libjpeg"') }}
+    uses: ./.github/workflows/build-dep.yml
+    with:
+      dep: libjpeg
   broadvoice:
     needs: [plan]
     if: ${{ !cancelled() && needs.plan.result == 'success' && contains(needs.plan.outputs.affected, '"broadvoice"') }}
@@ -257,7 +263,7 @@ jobs:
   # The `if` must rule out an empty/'[]' affected list BEFORE the matrix below is
   # expanded: GitHub evaluates `if` first, then `strategy`.
   publish:
-    needs: [plan, zlib, openssl, libpng, libks, signalwire-client-c, curl, libpcap, rabbitmq-c, libpq, mariadb-connector-c, g722_1, ilbc, libsilk, libtiff, lame, libogg, pthreads, libshout, mpg123, sqlite, ldns, speex, broadvoice, opencv, pcre, flite, lua]
+    needs: [plan, zlib, openssl, libpng, libks, signalwire-client-c, curl, libpcap, rabbitmq-c, libpq, mariadb-connector-c, g722_1, ilbc, libsilk, libtiff, lame, libogg, pthreads, libshout, mpg123, sqlite, ldns, speex, libjpeg, broadvoice, opencv, pcre, flite, lua]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.affected != '' && needs.plan.outputs.affected != '[]' && (github.event_name == 'push' || inputs.publish) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
     runs-on: ubuntu-latest
     permissions:

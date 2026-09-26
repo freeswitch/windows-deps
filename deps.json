@@ -111,6 +111,11 @@
       "source": "https://github.com/xiph/speex/archive/refs/tags/Speex-{version}.tar.gz",
       "deps": []
     },
+    "libjpeg": {
+      "version": "10",
+      "source": "https://www.ijg.org/files/jpegsrc.v{version}.tar.gz",
+      "deps": []
+    },
     "broadvoice": {
       "version": "0.1.0",
       "source": "https://github.com/freeswitch/libbroadvoice/archive/refs/tags/v{version}.tar.gz",
