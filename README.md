@@ -32,7 +32,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
   "repository": "freeswitch/windows-deps",
   "deps": {
     "zlib":    { "version": "1.3.2",  "source": "https://github.com/madler/zlib/releases/download/v{version}/zlib-{version}.tar.gz",         "deps": [] },
-    "openssl": { "version": "3.4.7",  "source": "https://github.com/openssl/openssl/releases/download/openssl-{version}/openssl-{version}.tar.gz", "deps": ["zlib"] },
+    "openssl": { "version": "3.4.8",  "source": "https://github.com/openssl/openssl/releases/download/openssl-{version}/openssl-{version}.tar.gz", "deps": ["zlib"] },
     "libpng":  { "version": "1.6.58", "source": "https://github.com/pnggroup/libpng/archive/refs/tags/v{version}.tar.gz",                   "deps": ["zlib"] },
     "libks":   { "version": "2.0.11", "source": "https://github.com/signalwire/libks/archive/refs/tags/v{version}.tar.gz",                  "deps": ["openssl"] },
     "signalwire-client-c": { "version": "2.0.5", "source": "https://github.com/signalwire/signalwire-c/archive/refs/tags/v{version}.tar.gz", "deps": ["libks", "openssl"] },
