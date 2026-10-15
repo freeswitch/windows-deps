@@ -27,7 +27,7 @@
       "deps": ["libks", "openssl"]
     },
     "curl": {
-      "version": "7.88.1",
+      "version": "8.23.0",
       "source": "https://github.com/curl/curl/releases/download/curl-{version_}/curl-{version}.tar.gz",
       "deps": ["zlib", "openssl"]
     },

@@ -36,7 +36,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "libpng":  { "version": "1.6.58", "source": "https://github.com/pnggroup/libpng/archive/refs/tags/v{version}.tar.gz",                   "deps": ["zlib"] },
     "libks":   { "version": "2.0.11", "source": "https://github.com/signalwire/libks/archive/refs/tags/v{version}.tar.gz",                  "deps": ["openssl"] },
     "signalwire-client-c": { "version": "2.0.5", "source": "https://github.com/signalwire/signalwire-c/archive/refs/tags/v{version}.tar.gz", "deps": ["libks", "openssl"] },
-    "curl":    { "version": "7.88.1", "source": "https://github.com/curl/curl/releases/download/curl-{version_}/curl-{version}.tar.gz",       "deps": ["zlib", "openssl"] },
+    "curl":    { "version": "8.23.0", "source": "https://github.com/curl/curl/releases/download/curl-{version_}/curl-{version}.tar.gz",       "deps": ["zlib", "openssl"] },
     "libpcap": { "version": "1.10.7", "source": "https://github.com/the-tcpdump-group/libpcap/archive/refs/tags/libpcap-{version}.tar.gz",  "deps": [] },
     "rabbitmq-c": { "version": "0.17.0", "source": "https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v{version}.tar.gz",             "deps": ["openssl"] },
     "libpq":   { "version": "17.11",  "source": "https://ftp.postgresql.org/pub/source/v{version}/postgresql-{version}.tar.gz",     "deps": ["openssl"] },
@@ -272,12 +272,15 @@ Notes carried over from the individual builders:
 - **curl is a static libcurl** shipped as `curl.lib` (Debug: curl's
   `libcurl-d.lib`, renamed the same way, plus its compiler PDB), like the old
   `curl-packaging` output. Consumers define `CURL_STATICLIB` and link OpenSSL,
-  zlib (import library, `zlib.dll` at run time) and `Wldap32.lib`; the packaged
-  `curl.props` imports `openssl.props` and `zlib.props` for that. The build
-  verifies that zlib, OpenSSL and Win32 LDAP references are present in the
-  library, i.e. that the feature set of the old packages was reproduced. The
-  version stays on the 7.88 line (7.88.1) as FreeSWITCH ships; bumping to 8.x
-  is a plain `deps.json` change.
+  zlib (import library, `zlib.dll` at run time), `Wldap32.lib`, `Secur32.lib`
+  (SSPI), `Bcrypt.lib` (random numbers) and `Normaliz.lib` (IDN); the packaged
+  `curl.props` imports `openssl.props` and `zlib.props` for that. HTTP/2 comes
+  from nghttp2, which the node builds from its release (version set in
+  `deps/curl/build.ps1`) and merges into `curl.lib`, so it is not a package of
+  its own and consumers link nothing more for it; IDN is Windows' own. libpsl
+  and libssh2 stay out. The build checks curl's feature list (SSL, libz, IPv6,
+  SSPI, NTLM, Kerberos, SPNEGO, HTTP2, IDN) and that zlib, OpenSSL, Win32 LDAP
+  and nghttp2 symbols are in the library.
 - **libpcap is a static `pcap_static.lib` built with `PCAP_TYPE=null`**: it
   reads and writes pcap/pcapng files (what FreeSWITCH uses it for) and cannot
   capture live traffic, because no Npcap SDK is involved — same as the old
