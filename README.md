@@ -269,18 +269,25 @@ Notes carried over from the individual builders:
   include `<openssl/ssl.h>`, so a consumer of the libks package also needs the
   OpenSSL headers on its include path (in FreeSWITCH: import `openssl.props`
   next to `libks.props`); nothing extra is linked.
-- **curl is a static libcurl** shipped as `curl.lib` (Debug: curl's
-  `libcurl-d.lib`, renamed the same way, plus its compiler PDB), like the old
-  `curl-packaging` output. Consumers define `CURL_STATICLIB` and link OpenSSL,
-  zlib (import library, `zlib.dll` at run time), `Wldap32.lib`, `Secur32.lib`
-  (SSPI), `Bcrypt.lib` (random numbers) and `Normaliz.lib` (IDN); the packaged
-  `curl.props` imports `openssl.props` and `zlib.props` for that. HTTP/2 comes
-  from nghttp2, which the node builds from its release (version set in
-  `deps/curl/build.ps1`) and merges into `curl.lib`, so it is not a package of
-  its own and consumers link nothing more for it; IDN is Windows' own. libpsl
-  and libssh2 stay out. The build checks curl's feature list (SSL, libz, IPv6,
-  SSPI, NTLM, Kerberos, SPNEGO, HTTP2, IDN) and that zlib, OpenSSL, Win32 LDAP
-  and nghttp2 symbols are in the library.
+- **curl is `libcurl.dll`**, with its import library shipped as `curl.lib`;
+  `curl.props` links that and copies the DLL (and its PDB) next to the
+  binaries. Up to curl 7.88 the Windows build always linked libcurl
+  statically, which put a separate libcurl, with its own globals, into every
+  DLL that uses it. FreeSWITCH hands curl handles across modules: the core
+  creates them (`switch_curl_easy_init`) and modules set options on them and
+  free them with `curl_*` directly, so a handle met two libcurls, and only the
+  core's had seen `curl_global_init`. curl 8's Windows clock divides by a
+  frequency that `curl_global_init` records, and a module freeing a core
+  handle crashed dividing by zero. One `libcurl.dll` per process is what
+  Linux has with `libcurl.so`.
+  OpenSSL (the package is static) and nghttp2 are linked into the DLL; zlib
+  stays `zlib.dll`. HTTP/2 comes from nghttp2, which the node builds from its
+  release (version set in `deps/curl/build.ps1`), so it is not a package of its
+  own; IDN is Windows' own. libpsl and libssh2 stay out. The build checks
+  curl's feature list (SSL, libz, IPv6, SSPI, NTLM, Kerberos, SPNEGO, HTTP2,
+  IDN), the DLL's exports, and that it imports zlib but neither OpenSSL nor
+  nghttp2. curl's `-d` debug postfix is off, so the DLL is `libcurl.dll` in
+  both configurations.
 - **libpcap is a static `pcap_static.lib` built with `PCAP_TYPE=null`**: it
   reads and writes pcap/pcapng files (what FreeSWITCH uses it for) and cannot
   capture live traffic, because no Npcap SDK is involved — same as the old

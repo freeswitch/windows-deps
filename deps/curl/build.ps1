@@ -1,30 +1,41 @@
 <#
 .SYNOPSIS
-    curl: builds libcurl as a STATIC library with CMake + the Visual C++
-    toolchain, against this repository's OpenSSL and zlib packages, and packages
-    it the way FreeSWITCH's w32\curl.props expects (the layout the old
-    curl-packaging project produced): the static library is shipped as curl.lib
-    and consumers define CURL_STATICLIB and link OpenSSL, zlib, Wldap32, Secur32,
-    Bcrypt and Normaliz themselves (curl.props imports openssl.props and zlib.props
-    for that).
+    curl: builds libcurl as a DLL with CMake + the Visual C++ toolchain, against
+    this repository's OpenSSL and zlib packages, and packages it for FreeSWITCH's
+    w32\curl.props: libcurl.dll, its import library shipped as curl.lib, and the
+    headers. curl.props links curl.lib and copies libcurl.dll next to the
+    binaries.
 
-    Features: OpenSSL (static), zlib (via the zlib import library -> zlib.dll at
-    run time), Win32 LDAP, IPv6, SSPI with NTLM, Kerberos and SPNEGO, HTTP/2 and
-    IDN; no PSL, no SSH. Dynamic CRT (/MD).
+    A DLL, not a static library, because FreeSWITCH hands curl handles across
+    modules: the core creates them (switch_curl_easy_init) and modules set options
+    and free them with curl_* directly. With a static curl every DLL carried its
+    own libcurl and its own globals, and only the core's copy ever saw
+    curl_global_init; curl 8's Windows timer divides by a frequency that
+    curl_global_init sets, so a module freeing a core handle died dividing by
+    zero. One libcurl.dll per process is what Linux has with libcurl.so.
 
-    HTTP/2 comes from nghttp2, built here from its release and merged into
-    curl.lib, so it is part of this package rather than a package of its own and
-    consumers link nothing more for it. Its version is $nghttp2Version below:
-    changing it changes this node and rebuilds curl. IDN is Windows' own
-    (USE_WIN32_IDN, IdnToAscii from Normaliz.dll), so it needs no library.
+    Features: OpenSSL (linked into the DLL from the static OpenSSL package),
+    zlib (zlib.dll at run time), Win32 LDAP, IPv6, SSPI with NTLM, Kerberos and
+    SPNEGO, HTTP/2 and IDN; no PSL, no SSH. Dynamic CRT (/MD).
+
+    HTTP/2 comes from nghttp2, built here from its release and linked into
+    libcurl.dll, so it is part of this package rather than a package of its own.
+    Its version is $nghttp2Version below: changing it changes this node and
+    rebuilds curl. IDN is Windows' own (USE_WIN32_IDN, IdnToAscii from
+    Normaliz.dll), so it needs no library.
 
     Package <pkg> = curl-<version>_<build>:
       <pkg>-headers.zip                       <pkg>/COPYING, COPYING.nghttp2
                                               <pkg>/include/curl/*.h
       <pkg>-binaries-<platform>-<config>.zip  <pkg>/COPYING, COPYING.nghttp2
-                                              <pkg>/binaries/<Platform>/<Config>/curl.lib       (static libcurl with nghttp2 merged in; from libcurl-d.lib in Debug)
-                                                                             /libcurl-d.pdb  (Debug only: the compiler PDB of the static lib)
+                                              <pkg>/binaries/<Platform>/<Config>/libcurl.dll
+                                                                             /curl.lib     (import library)
+                                                                             /libcurl.pdb
       SHA256SUMS.txt, <pkg>-BOM.txt
+
+    The DLL is libcurl.dll in both configurations (curl's "-d" debug postfix is
+    turned off), so the name the import library refers to is the one curl.props
+    copies.
 
     Environment (all optional): CURL_VERSION, BUILD_NUMBER, PKG_NAME, CONFIGS,
     PLATFORMS, OUT_DIR, BUILD_ROOT, CURL_URL, NGHTTP2_VERSION, NGHTTP2_URL,
@@ -141,9 +152,9 @@ cmake --install "$ngBld" || exit /b 1
         $ngVer = Select-String -Path (Join-Path $ngInc 'nghttp2\nghttp2ver.h') -Pattern '#define\s+NGHTTP2_VERSION\s+"([^"]+)"' | Select-Object -First 1
         if (-not $ngVer -or $ngVer.Matches[0].Groups[1].Value -ne $nghttp2Version) { throw "nghttp2 source does not declare version $nghttp2Version." }
 
-        # Mirrors the old curl-packaging vcxproj: static libcurl with OpenSSL + zlib,
-        # everything else at curl's Windows defaults (Win32 LDAP on, SSPI on, IDN
-        # off, /MD). Only the library target is built. curl 8 looks for libpsl,
+        # libcurl.dll with OpenSSL + zlib, everything else at curl's Windows
+        # defaults (Win32 LDAP on, /MD). Only the library target is built. The
+        # OpenSSL package is static, so OpenSSL is linked into the DLL. curl 8 looks for libpsl,
         # libidn2 and libssh2 by default and stops without libpsl; they are switched
         # off explicitly. HTTP/2 uses the nghttp2 built above
         # (NGHTTP2_USE_STATIC_LIBS makes curl compile with NGHTTP2_STATICLIB), and
@@ -157,7 +168,9 @@ cmake --install "$ngBld" || exit /b 1
             "-B `"$(ConvertTo-ForwardSlashes $bldDir)`"",
             '-G "NMake Makefiles"',
             "-DCMAKE_BUILD_TYPE=$config",
-            '-DBUILD_SHARED_LIBS=OFF',
+            '-DBUILD_SHARED_LIBS=ON',
+            '-DBUILD_STATIC_LIBS=OFF',
+            '-DCMAKE_DEBUG_POSTFIX=',
             '-DBUILD_CURL_EXE=OFF',
             '-DBUILD_TESTING=OFF',
             '-DCURL_USE_OPENSSL=ON',
@@ -184,18 +197,19 @@ cmake --install "$ngBld" || exit /b 1
 call "$($tc.VcVarsAll)" $vcArch || exit /b 1
 cmake $($configureArgs -join ' ') > "$(Join-Path $work 'configure.log')" 2>&1 || (type "$(Join-Path $work 'configure.log')" & exit /b 1)
 type "$(Join-Path $work 'configure.log')"
-cmake --build "$bldDir" --target libcurl_static || exit /b 1
+cmake --build "$bldDir" --target libcurl_shared || exit /b 1
 "@
         $log = Join-Path $s.OutDir "build-$plat-$config.log"
         Invoke-BuildBatch -Script $bat -BatchFile (Join-Path $work 'build.bat') -LogFile $log -Label "curl build [$plat/$config]"
 
         # --- verify + stage ------------------------------------------------------
-        # curl's CMake: static lib named libcurl.lib, Debug postfix "-d".
-        $postfix = if ($config -eq 'Debug') { '-d' } else { '' }
-        $lib = Join-Path $bldDir "lib\libcurl$postfix.lib"
-        if (-not (Test-Path $lib)) {
-            $have = Get-ChildItem -Recurse -File $bldDir -Filter '*.lib' | ForEach-Object { $_.FullName.Substring($bldDir.Length + 1) }
-            throw "curl [$plat/$config] did not produce lib\libcurl$postfix.lib. Found: $($have -join ', ')."
+        # curl's CMake: libcurl.dll plus import library libcurl_imp.lib (no debug
+        # postfix, see above), wherever the generator put them.
+        $dll = Get-ChildItem -Recurse -File $bldDir -Filter 'libcurl.dll' | Select-Object -First 1
+        $imp = Get-ChildItem -Recurse -File $bldDir -Filter 'libcurl_imp.lib' | Select-Object -First 1
+        if (-not $dll -or -not $imp) {
+            $have = Get-ChildItem -Recurse -File $bldDir -Include '*.dll', '*.lib' | ForEach-Object { $_.FullName.Substring($bldDir.Length + 1) }
+            throw "curl [$plat/$config] did not produce libcurl.dll and libcurl_imp.lib. Found: $($have -join ', ')."
         }
         # The feature line curl's CMake prints must carry what FreeSWITCH relies on.
         $features = Select-String -Path (Join-Path $work 'configure.log') -Pattern '^-- Features: (.*)$' | Select-Object -First 1
@@ -204,38 +218,40 @@ cmake --build "$bldDir" --target libcurl_static || exit /b 1
             if ($features.Matches[0].Groups[1].Value -notmatch "(^| )$f( |$)") { throw "curl [$plat/$config] is built without $f (features: $($features.Matches[0].Groups[1].Value))." }
         }
 
-        $libText = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($lib))
-        if ($libText -notmatch 'inflateInit_') { throw "libcurl$postfix.lib has no zlib references -- zlib support did not get enabled." }
-        if ($libText -notmatch 'SSL_CTX_new')  { throw "libcurl$postfix.lib has no OpenSSL references -- OpenSSL support did not get enabled." }
-        if ($libText -notmatch 'ldap_init')    { throw "libcurl$postfix.lib has no LDAP references -- Win32 LDAP did not get enabled (the old packages had it)." }
+        # Exports the API, and imports only system DLLs and zlib: OpenSSL and
+        # nghttp2 are inside, so neither may show up as a dependency.
+        $dumpBat = @"
+@echo on
+call "$($tc.VcVarsAll)" $vcArch || exit /b 1
+dumpbin /nologo /exports "$($dll.FullName)" > "$(Join-Path $work 'exports.txt')" || exit /b 1
+dumpbin /nologo /dependents "$($dll.FullName)" > "$(Join-Path $work 'dependents.txt')" || exit /b 1
+"@
+        Invoke-BuildBatch -Script $dumpBat -BatchFile (Join-Path $work 'dump.bat') -LogFile (Join-Path $work 'dump.log') -Label "libcurl.dll inspection [$plat/$config]"
+        $exports = Get-Content (Join-Path $work 'exports.txt') -Raw
+        foreach ($sym in 'curl_global_init', 'curl_easy_init', 'curl_easy_perform', 'curl_easy_cleanup', 'curl_easy_setopt',
+                         'curl_mime_init', 'curl_formadd', 'curl_slist_append', 'curl_version_info') {
+            if ($exports -notmatch "\b$sym\b") { throw "libcurl.dll [$plat/$config] does not export $sym." }
+        }
+        $deps = @(Get-Content (Join-Path $work 'dependents.txt') | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '\.dll$' })
+        Write-Host "  libcurl.dll imports: $($deps -join ', ')"
+        $zd = if ($config -eq 'Debug') { 'd' } else { '' }
+        if ($deps -notcontains "zlib$zd.dll") { throw "libcurl.dll [$plat/$config] does not import zlib$zd.dll -- zlib support did not get enabled." }
+        foreach ($d in $deps) {
+            if ($d -match 'nghttp2|libcrypto|libssl') { throw "libcurl.dll [$plat/$config] imports $d; it should have been linked in." }
+        }
+        $dllText = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($dll.FullName))
+        if ($dllText -notmatch 'OpenSSL 3\.') { throw "libcurl.dll [$plat/$config] carries no OpenSSL." }
 
         $pkgRoot = Join-Path $stage "bin-$plat-$config\$($s.Pkg)"
         $binDst  = Join-Path $pkgRoot "binaries\$plat\$config"
         New-Item -ItemType Directory -Force -Path $binDst | Out-Null
-
-        # A static library only refers to another one; merge nghttp2's objects into
-        # curl.lib (the name curl.props links) so consumers need nothing extra.
-        $merged = Join-Path $binDst 'curl.lib'
-        $mergeBat = @"
-@echo on
-call "$($tc.VcVarsAll)" $vcArch || exit /b 1
-lib /nologo /OUT:"$merged" "$lib" "$ngLib" || exit /b 1
-dumpbin /nologo /linkermember:1 "$merged" > "$(Join-Path $work 'symbols.txt')" || exit /b 1
-"@
-        Invoke-BuildBatch -Script $mergeBat -BatchFile (Join-Path $work 'merge.bat') -LogFile (Join-Path $work 'merge.log') -Label "curl.lib merge [$plat/$config]"
-        $syms = Get-Content (Join-Path $work 'symbols.txt') -Raw
-        foreach ($sym in 'curl_easy_init', 'curl_easy_perform', 'nghttp2_session_client_new', 'nghttp2_version') {
-            if ($syms -notmatch "\b$sym\b") { throw "curl.lib [$plat/$config] does not define $sym after the merge." }
-        }
+        Copy-Item $dll.FullName -Destination $binDst
+        Copy-Item $imp.FullName -Destination (Join-Path $binDst 'curl.lib')      # the name curl.props links
+        $pdb = Get-ChildItem -Recurse -File $bldDir -Filter 'libcurl.pdb' | Select-Object -First 1
+        if ($pdb) { Copy-Item $pdb.FullName -Destination $binDst }
+        else { Write-Host "  NOTE: no libcurl.pdb found; continuing without it." -ForegroundColor Yellow }
         Copy-Item (Join-Path $srcDir 'COPYING') -Destination $pkgRoot
         Copy-Item (Join-Path $ngSrc 'COPYING') -Destination (Join-Path $pkgRoot 'COPYING.nghttp2')
-        if ($config -eq 'Debug') {
-            # Compiler PDB of the static library, wherever the generator put it.
-            $pdb = Get-ChildItem -Recurse -File $bldDir -Filter "libcurl$postfix.pdb" | Select-Object -First 1
-            if (-not $pdb) { $pdb = Get-ChildItem -Recurse -File (Join-Path $bldDir 'lib') -Filter '*.pdb' | Sort-Object Length -Descending | Select-Object -First 1 }
-            if ($pdb) { Copy-Item $pdb.FullName -Destination (Join-Path $binDst "libcurl$postfix.pdb") }
-            else { Write-Host "  NOTE: no PDB found for the Debug static library; continuing without it." -ForegroundColor Yellow }
-        }
         New-PackageZip (Join-Path $stage "bin-$plat-$config\$($s.Pkg)") (Join-Path $s.OutDir ("$($s.Pkg)-binaries-$plat-$config.zip".ToLower()))
 
         if (-not $headerSrc) { $headerSrc = $srcDir; $ngLicenseSrc = $ngSrc }
@@ -258,6 +274,6 @@ New-PackageZip $hdrRoot (Join-Path $s.OutDir ("$($s.Pkg)-headers.zip".ToLower())
 
 Write-Checksums $s.OutDir
 Write-Bom $s @("cmake: $cmakeVersion", "toolchain: $($tc.VsInstall)",
-               "bundled: nghttp2 $nghttp2Version ($nghttp2Url), merged into curl.lib",
-               "features: static libcurl, OpenSSL (static), zlib (import lib), Win32 LDAP, SSPI, NTLM, Kerberos, SPNEGO, HTTP2, IDN (Win32), /MD")
+               "bundled: nghttp2 $nghttp2Version ($nghttp2Url), linked into libcurl.dll",
+               "features: libcurl.dll, OpenSSL (linked in), zlib (zlib.dll), Win32 LDAP, SSPI, NTLM, Kerberos, SPNEGO, HTTP2, IDN (Win32), /MD")
 Write-PackageSummary $s

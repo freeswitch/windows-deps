@@ -42,7 +42,7 @@
   <Target Name="curlBinariesDownloadTarget" BeforeTargets="CustomBuild" DependsOnTargets="7za">
       <DownloadPackageTask
            package="https://github.com/freeswitch/windows-deps/releases/download/curl-v$(curlVersion)_$(curlBuildNumber)/curl-$(curlVersion)_$(curlBuildNumber)-binaries-$(Platform.ToLower())-$(LibraryConfiguration.ToLower()).zip"
-           expectfileordirectory="$(curlLibDir)\binaries\$(Platform)\$(LibraryConfiguration)\curl.lib"
+           expectfileordirectory="$(curlLibDir)\binaries\$(Platform)\$(LibraryConfiguration)\libcurl.dll"
            outputfolder=""
            outputfilename=""
            extractto="$(BaseDir)libs\"
@@ -57,15 +57,24 @@
            extractto="$(BaseDir)libs\"
       />
   </Target>
+  <Target Name="curlcopyTarget" BeforeTargets="CustomBuild" DependsOnTargets="curlBinariesDownloadTarget">
+      <ItemGroup>
+          <curlFiles Include="$(curlLibDir)\binaries\$(Platform)\$(LibraryConfiguration)\libcurl.dll;$(curlLibDir)\binaries\$(Platform)\$(LibraryConfiguration)\libcurl.pdb" />
+      </ItemGroup>
+      <Copy SkipUnchangedFiles="true"
+          SourceFiles="@(curlFiles)"
+          DestinationFiles="@(curlFiles->'$(BaseDir)$(Platform)\$(LibraryConfiguration)\%(Filename)%(Extension)')"
+      />
+  </Target>
 
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>$(curlLibDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>HAVE_CURL;CURL_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>HAVE_CURL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(curlLibDir)\binaries\$(Platform)\$(LibraryConfiguration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>curl.lib;Wldap32.lib;Secur32.lib;Bcrypt.lib;Normaliz.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>curl.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 
