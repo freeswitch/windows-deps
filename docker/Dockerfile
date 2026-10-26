@@ -1,9 +1,9 @@
 # escape=`
 #
 # Toolchain image for building every dependency in this repository on Windows:
-# Visual Studio 2022 Build Tools (MSVC + Windows SDK + nmake), Strawberry Perl
-# and NASM (OpenSSL), CMake (zlib and other CMake-based libraries), Meson +
-# Ninja + Python + win_flex/win_bison (libpq).
+# Visual Studio 2022 Build Tools (MSVC + Windows SDK + nmake, plus ClangCL for
+# libnode), Strawberry Perl and NASM (OpenSSL), CMake (zlib and other
+# CMake-based libraries), Meson + Ninja + Python + win_flex/win_bison (libpq).
 #
 # The image contains ONLY the toolchain. The repository is mounted at C:\src at
 # run time, so script changes never require rebuilding the (slow, multi-GB)
@@ -54,6 +54,8 @@ RUN choco install -y --no-progress cmake --installargs 'ADD_CMAKE_TO_SYSTEM_PATH
 # ---------------------------------------------------------------------------
 # 2. Visual Studio 2022 Build Tools: the C++ workload (MSVC v143 + Windows SDK +
 #    nmake + rc). The build scripts enter this environment via vcvarsall.bat.
+#    The two LLVM components are ClangCL, which Node.js's vcbuild.bat requires
+#    from Node 24 on (libnode).
 #    Exit code 3010 == success-but-reboot-required, which is fine in an image.
 # ---------------------------------------------------------------------------
 RUN Invoke-WebRequest -Uri $env:VS_BOOTSTRAPPER_URL -OutFile C:\vs_buildtools.exe; `
@@ -62,6 +64,8 @@ RUN Invoke-WebRequest -Uri $env:VS_BOOTSTRAPPER_URL -OutFile C:\vs_buildtools.ex
         '--quiet','--wait','--norestart','--nocache', `
         '--installPath','C:\BuildTools', `
         '--add','Microsoft.VisualStudio.Workload.VCTools', `
+        '--add','Microsoft.VisualStudio.Component.VC.Llvm.Clang', `
+        '--add','Microsoft.VisualStudio.Component.VC.Llvm.ClangToolset', `
         '--includeRecommended'; `
     if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "VS Build Tools install failed ($($p.ExitCode))" }; `
     Remove-Item C:\vs_buildtools.exe -Force

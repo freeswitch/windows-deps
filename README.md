@@ -59,14 +59,15 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "opencv":  { "version": "4.10.0", "source": "https://github.com/opencv/opencv/archive/refs/tags/{version}.tar.gz",              "deps": [] },
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
     "flite":   { "version": "2.2",    "source": "https://github.com/festvox/flite/archive/refs/tags/v{version}.tar.gz",           "deps": [] },
-    "lua":     { "version": "5.3.6",  "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",                                  "deps": [] }
+    "lua":     { "version": "5.3.6",  "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",                                  "deps": [] },
+    "libnode": { "version": "24.22.1", "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",                     "deps": [] }
   }
 }
 ```
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns`, `speex`, `libjpeg`, `freetype` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns`, `speex`, `libjpeg`, `freetype`, `libnode` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -148,8 +149,8 @@ same build number.
 
 ### With Docker (Windows containers)
 
-The image holds the toolchain only (VS 2022 Build Tools, Perl, NASM, CMake, and
-Meson + Ninja + Python + win_flex/win_bison for libpq); the
+The image holds the toolchain only (VS 2022 Build Tools with ClangCL, Perl,
+NASM, CMake, and Meson + Ninja + Python + win_flex/win_bison for libpq); the
 repository is mounted, so script edits need no image rebuild:
 
 ```powershell
@@ -165,7 +166,8 @@ Output: `.\artifacts\<dep>\`. cmd.exe: replace `${PWD}` with `%cd%`.
 
 With Visual Studio 2022+ (C++ workload), CMake, and — for OpenSSL — Strawberry
 Perl and NASM; libpq additionally needs Meson, Ninja, Python and
-win_flex/win_bison (see `deps/libpq/prereqs.ps1`):
+win_flex/win_bison (see `deps/libpq/prereqs.ps1`), libnode NASM, Python and
+Visual Studio's ClangCL components (see `deps/libnode/prereqs.ps1`):
 
 ```powershell
 .\scripts\build.ps1 -Dep zlib
@@ -206,6 +208,7 @@ path `C:\src\artifacts\zlib`.
 | libpq: `PG_PREFIX` | `C:/Program Files/PostgreSQL/17` | `--prefix`; only reaches `pg_config_paths.h`, of which libpq uses `SYSCONFDIR` (where it looks for `pg_service.conf`). |
 | libpq: `EXTRA_MESON` | *(empty)* | Extra `meson setup` arguments. |
 | lua: `LUA_LIB_NAME`, `EXTRA_CFLAGS` | `lua<major><minor>`, *(empty)* | Name of the produced DLL/import library, extra `cl` flags. |
+| libnode: `VCBUILD_ARGS` | *(empty)* | Extra `vcbuild.bat` arguments. |
 
 `<DEP>` is the dependency name upper-cased with `-` → `_` (`RABBITMQ_C_PKG_BASE`).
 
@@ -222,7 +225,8 @@ path `C:\src\artifacts\zlib`.
    `deps/<name>/prereqs.ps1` (and the same tools to `docker/Dockerfile`).
 4. Add a job to `.github/workflows/build.yml` with `needs` listing `plan` plus
    the node's dependencies, copying the `if` pattern of the existing jobs, and
-   add the node to the `publish` job's `needs`.
+   add the node to the `publish` job's `needs`. A build that needs more than
+   two hours passes `timeout` (minutes) to `build-dep.yml`, as `libnode` does.
 5. Add the reference props under `deps/<name>/freeswitch/w32/`.
 
 ## Consuming in FreeSWITCH
@@ -616,6 +620,30 @@ Notes carried over from the individual builders:
   suite, and has no `lua.hpp` — which the packages have always shipped (the
   script generates it when a source archive lacks it). `lua.exe` and `luac.exe`
   are not built, as before.
+- **libnode is Node.js built as `libnode.dll`**, which is how `mod_v8` gets V8
+  on Windows; on Linux it builds against the distribution's `libnode-dev`. The
+  node takes over from the `freeswitch/libnode-packaging` repository and does
+  what its script did: Node's own `vcbuild.bat dll <config> x64 nonpm`, which
+  configures `--shared` and leaves npm out, from the release tarball on
+  nodejs.org instead of a git clone. From Node 24 on `vcbuild.bat` insists on
+  ClangCL, hence the two LLVM components in the Docker image and the check in
+  `prereqs.ps1`; it finds Visual Studio itself, NASM assembles the bundled
+  OpenSSL. One patch: Node compiles V8's libplatform into the DLL but exports
+  it only under `BUILDING_V8_PLATFORM_SHARED`, which `common.gypi` does not
+  define, and without it `mod_v8` cannot link
+  `v8::platform::NewDefaultPlatform`; the script adds the define next to
+  `BUILDING_V8_SHARED` and checks the export (with `v8::V8::Initialize`,
+  `v8::Isolate::New` and `v8::String::NewFromUtf8`) in `dumpbin /exports`. The
+  headers zip is `deps\v8\include` as is, and every zip carries Node's
+  aggregated `LICENSE`, which covers everything linked into the DLL (V8,
+  OpenSSL, ICU, libuv, zlib, …). x64 only — Node has no 32 bit Windows build —
+  with `libnode.pdb` in the Debug package. A Release + Debug build takes hours,
+  so the job runs with a 360 minute timeout. The version has to be one
+  `mod_v8` compiles against: 24.22.1 (V8 13.6) needs the port off
+  `FunctionCallbackInfo::Holder()` and `SetAccessor()`, which V8 removed after
+  11.3 (Node 20). `libnode.props` now copies `libnode.dll` whenever it
+  differs rather than only when it is missing, so a version bump replaces the
+  DLL already in the output folder.
 - **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which

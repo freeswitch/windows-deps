@@ -145,6 +145,11 @@
       "version": "5.3.6",
       "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",
       "deps": []
+    },
+    "libnode": {
+      "version": "24.22.1",
+      "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",
+      "deps": []
     }
   }
 }

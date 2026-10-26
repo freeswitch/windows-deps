@@ -12,12 +12,17 @@ on:
         description: 'Dependency to build (key in deps.json)'
         required: true
         type: string
+      timeout:
+        description: 'Job timeout in minutes'
+        required: false
+        type: number
+        default: 120
 
 jobs:
   build:
     name: ${{ inputs.dep }}
     runs-on: windows-2022
-    timeout-minutes: 120
+    timeout-minutes: ${{ inputs.timeout }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
