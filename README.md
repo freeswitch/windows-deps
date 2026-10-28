@@ -60,14 +60,15 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
     "flite":   { "version": "2.2",    "source": "https://github.com/festvox/flite/archive/refs/tags/v{version}.tar.gz",           "deps": [] },
     "lua":     { "version": "5.3.6",  "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",                                  "deps": [] },
-    "libnode": { "version": "24.22.1", "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",                     "deps": [] }
+    "libnode": { "version": "24.22.1", "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",                     "deps": [] },
+    "ffmpeg":  { "version": "8.1.3",  "source": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.gz",                          "deps": [] }
   }
 }
 ```
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns`, `speex`, `libjpeg`, `freetype`, `libnode` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns`, `speex`, `libjpeg`, `freetype`, `libnode`, `ffmpeg` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -150,8 +151,8 @@ same build number.
 ### With Docker (Windows containers)
 
 The image holds the toolchain only (VS 2022 Build Tools with ClangCL, Perl,
-NASM, CMake, and Meson + Ninja + Python + win_flex/win_bison for libpq); the
-repository is mounted, so script edits need no image rebuild:
+NASM, CMake, Meson + Ninja + Python + win_flex/win_bison for libpq, and MSYS2
+for FFmpeg); the repository is mounted, so script edits need no image rebuild:
 
 ```powershell
 docker build -t windows-deps docker
@@ -167,7 +168,8 @@ Output: `.\artifacts\<dep>\`. cmd.exe: replace `${PWD}` with `%cd%`.
 With Visual Studio 2022+ (C++ workload), CMake, and — for OpenSSL — Strawberry
 Perl and NASM; libpq additionally needs Meson, Ninja, Python and
 win_flex/win_bison (see `deps/libpq/prereqs.ps1`), libnode NASM, Python and
-Visual Studio's ClangCL components (see `deps/libnode/prereqs.ps1`):
+Visual Studio's ClangCL components (see `deps/libnode/prereqs.ps1`), ffmpeg NASM
+and MSYS2 with make, pkgconf, diffutils and bzip2 (see `deps/ffmpeg/prereqs.ps1`):
 
 ```powershell
 .\scripts\build.ps1 -Dep zlib
@@ -209,6 +211,10 @@ path `C:\src\artifacts\zlib`.
 | libpq: `EXTRA_MESON` | *(empty)* | Extra `meson setup` arguments. |
 | lua: `LUA_LIB_NAME`, `EXTRA_CFLAGS` | `lua<major><minor>`, *(empty)* | Name of the produced DLL/import library, extra `cl` flags. |
 | libnode: `VCBUILD_ARGS` | *(empty)* | Extra `vcbuild.bat` arguments. |
+| ffmpeg: `VARIANTS` | `openh264 x264` | Which variants to build. |
+| ffmpeg: `OPENH264_VERSION`, `OPENH264_DLL_URL`, `OPENH264_URL` | `2.7.0`, Cisco's `openh264-<ver>-win64.dll.bz2`, the GitHub tag archive | The openh264 release avcodec is linked against; must be the one FreeSWITCH downloads. |
+| ffmpeg: `X264_COMMIT`, `X264_URL` | `b35605ac…` (stable, X264_BUILD 165), its code.videolan.org archive | The x264 the GPL variant bundles. |
+| ffmpeg: `MSYS2_ROOT`, `MAKE_JOBS` | `C:\msys64` or `C:\tools\msys64`, `NUMBER_OF_PROCESSORS` | Where MSYS2 is, `make -j`. |
 
 `<DEP>` is the dependency name upper-cased with `-` → `_` (`RABBITMQ_C_PKG_BASE`).
 
@@ -644,6 +650,46 @@ Notes carried over from the individual builders:
   11.3 (Node 20). `libnode.props` now copies `libnode.dll` whenever it
   differs rather than only when it is missing, so a version bump replaces the
   DLL already in the output folder.
+- **ffmpeg is FFmpeg as shared DLLs for `mod_av`** and takes over from the
+  `freeswitch/ffmpeg-packaging` repository: the same configure line
+  (`--toolchain=msvc`, shared, no programs, runtime CPU detection, Windows
+  threads), the same two variants, the same layout inside the zips, now named
+  `ffmpeg-<ver>_<build>`. FFmpeg's only build system is configure + make, so the
+  node needs MSYS2 (`make`, `pkgconf`, `diffutils`, and `bzip2` for the openh264
+  download) as a shell; MSVC does all the compiling and nothing of MSYS2 ends up
+  in the DLLs. The source is the release tarball from ffmpeg.org; its `VERSION`
+  file is checked against the manifest, and the DLL names (`avcodec-62.dll`, …)
+  are read from the libraries' `version_major.h`. The two variants are the one
+  exception to the asset names above: their binaries zips are
+  `<pkg>-<variant>-binaries-x64-<config>.zip` and hold
+  `<pkg>\binaries\<variant>\x64\<Config>\`, so both extract into one
+  `libs\<pkg>\`; `ffmpeg.props` picks the variant from the configuration name
+  (`Release-openh264`, `Debug-x264`, …).
+  - `openh264` (LGPL) encodes H.264 through Cisco's openh264, which is never
+    compiled or shipped here: Cisco distributes the binary and carries the
+    H.264 patent licence for it, and FreeSWITCH downloads it itself
+    (`w32\download_openh264.props` at build time, the MSI's
+    `Setup.CA.DownloadOpenH264` at install time). avcodec links an import
+    library made from that DLL's exports and is compiled against the `wels`
+    headers of the same release, which therefore has to be the release
+    FreeSWITCH downloads: 2.x moved the decoder's vtable (`FlushFrame` was
+    inserted in the middle of `ISVCDecoder`), so headers of one release against
+    the DLL of another call the wrong methods. The node uses 2.7.0, and
+    FreeSWITCH's two download URLs move to 2.7.0 with it. The DLL comes from
+    Cisco over plain HTTP, so the build checks its Authenticode signature
+    (Cisco) and its file version before using it. The zips carry Cisco's
+    `OPENH264_BINARY_LICENSE.txt`, which has to accompany software using it.
+  - `x264` (GPL, `--enable-gpl --enable-libx264`) builds x264 from a pinned
+    commit of its stable branch as `libx264-<X264_BUILD>.dll` and ships it next
+    to avcodec. It is a separate DLL on purpose: one release-CRT x264 serves the
+    Debug avcodec as well without mixing CRTs inside a DLL.
+
+  Both variants decode H.264 with FFmpeg's own decoder. The Debug zips carry the
+  PDBs, which FFmpeg leaves in the build tree rather than installing. FFmpeg 8 removed
+  `libpostproc`, so the x264 zips no longer have `postproc-*.dll`. `mod_av` has
+  to be ported before FreeSWITCH can take this package: FFmpeg 8 removed
+  `FF_PROFILE_*` and `AVCodecContext.ticks_per_frame`, which it uses, and it
+  reads `AVInputFormat.read_seek` on every libavformat but 61.
 - **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which

@@ -150,6 +150,11 @@
       "version": "24.22.1",
       "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",
       "deps": []
+    },
+    "ffmpeg": {
+      "version": "8.1.3",
+      "source": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.gz",
+      "deps": []
     }
   }
 }

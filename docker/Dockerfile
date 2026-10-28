@@ -3,7 +3,8 @@
 # Toolchain image for building every dependency in this repository on Windows:
 # Visual Studio 2022 Build Tools (MSVC + Windows SDK + nmake, plus ClangCL for
 # libnode), Strawberry Perl and NASM (OpenSSL), CMake (zlib and other
-# CMake-based libraries), Meson + Ninja + Python + win_flex/win_bison (libpq).
+# CMake-based libraries), Meson + Ninja + Python + win_flex/win_bison (libpq),
+# MSYS2 with make, pkgconf, diffutils and bzip2 (FFmpeg).
 #
 # The image contains ONLY the toolchain. The repository is mounted at C:\src at
 # run time, so script changes never require rebuilding the (slow, multi-GB)
@@ -89,7 +90,21 @@ RUN choco install -y --no-progress python3 winflexbison3; `
     meson --version; ninja --version
 
 # ---------------------------------------------------------------------------
-# 4. Entry point: the dispatcher from the mounted repository.
+# 4. MSYS2 for FFmpeg: its configure + make need a POSIX shell, make, pkgconf
+#    and diffutils (MSVC still does all the compiling), bzip2 unpacks Cisco's
+#    openh264 DLL. choco installs MSYS2 to C:\tools\msys64, where
+#    deps\ffmpeg\build.ps1 looks for it.
+# ---------------------------------------------------------------------------
+RUN choco install -y --no-progress msys2; `
+    if ($LASTEXITCODE -ne 0) { throw ('choco install failed: ' + $LASTEXITCODE) }; `
+    & C:\tools\msys64\usr\bin\bash.exe -lc 'pacman -Sy --noconfirm --needed make pkgconf diffutils bzip2'; `
+    if ($LASTEXITCODE -ne 0) { throw ('pacman failed: ' + $LASTEXITCODE) }; `
+    foreach ($t in @('make.exe', 'pkgconf.exe', 'diff.exe', 'bunzip2.exe')) { `
+        if (-not (Test-Path ('C:\tools\msys64\usr\bin\' + $t))) { throw ('not installed: ' + $t) } `
+    }
+
+# ---------------------------------------------------------------------------
+# 5. Entry point: the dispatcher from the mounted repository.
 # ---------------------------------------------------------------------------
 # NOTE: do NOT set `ENV PATH` here -- the Windows base image exports the variable
 # as `Path` (mixed case) and Docker's ${...} substitution is case-sensitive, so
