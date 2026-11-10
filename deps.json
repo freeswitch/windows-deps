@@ -155,6 +155,11 @@
       "version": "8.1.3",
       "source": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.gz",
       "deps": []
+    },
+    "miniupnpc": {
+      "version": "2.3.3",
+      "source": "https://github.com/miniupnp/miniupnp/releases/download/miniupnpc_{version_}/miniupnpc-{version}.tar.gz",
+      "deps": []
     }
   }
 }

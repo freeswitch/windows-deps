@@ -1,0 +1,20 @@
+minixml: parseelt: stop at the end of the buffer after a namespace prefix
+
+parseelt() skips the ':' of a prefixed element name and goes on reading
+without checking for the end of the buffer, so input that ends in ':' inside
+an element name reads one byte past the heap buffer.
+
+Upstream commit 64ef08a12aabab57be0bf7e40f047c8f14dedf9c, made after
+miniupnpc 2.3.3.
+
+--- a/src/minixml.c
++++ b/src/minixml.c
+@@ -145,6 +145,8 @@
+ 				{
+ 					i = 0;
+ 					elementname = ++p->xml;
++					if (p->xml >= p->xmlend)
++						return;
+ 				}
+ 			}
+ 			if(i>0)

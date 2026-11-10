@@ -61,14 +61,15 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "flite":   { "version": "2.2",    "source": "https://github.com/festvox/flite/archive/refs/tags/v{version}.tar.gz",           "deps": [] },
     "lua":     { "version": "5.3.6",  "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",                                  "deps": [] },
     "libnode": { "version": "24.22.1", "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",                     "deps": [] },
-    "ffmpeg":  { "version": "8.1.3",  "source": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.gz",                          "deps": [] }
+    "ffmpeg":  { "version": "8.1.3",  "source": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.gz",                          "deps": [] },
+    "miniupnpc": { "version": "2.3.3", "source": "https://github.com/miniupnp/miniupnp/releases/download/miniupnpc_{version_}/miniupnpc-{version}.tar.gz", "deps": [] }
   }
 }
 ```
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns`, `speex`, `libjpeg`, `freetype`, `libnode`, `ffmpeg` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns`, `speex`, `libjpeg`, `freetype`, `libnode`, `ffmpeg`, `miniupnpc` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -690,6 +691,24 @@ Notes carried over from the individual builders:
   to be ported before FreeSWITCH can take this package: FFmpeg 8 removed
   `FF_PROFILE_*` and `AVCodecContext.ticks_per_frame`, which it uses, and it
   reads `AVInputFormat.read_seek` on every libavformat but 61.
+- **miniupnpc is 2.3.3 with upstream's later `minixml.c` fixes** and replaces
+  the 2009 snapshot (1.3) FreeSwitchCore compiles from `libs\miniupnpc`. The
+  source is the release tarball attached to upstream's GitHub release, built
+  with upstream's CMake as the static `libminiupnpc.lib` (`/MD`); consumers
+  define `MINIUPNP_STATICLIB` and link `ws2_32.lib` and `iphlpapi.lib`, which
+  `miniupnpc.props` does. The tag's source archive is not used: it is the
+  whole miniupnp repository, whose symlinked `LICENSE` files Windows `tar`
+  cannot create. The `miniupnpd_*` tags belong to the daemon, a separate
+  version line, and no miniupnpc release has followed 2.3.3, so `patches\`
+  carries the three fixes upstream has made to its XML parser since, each a
+  one-byte heap over-read a spoofed gateway can trigger (one in `parseatt`,
+  two in `parseelt`). The version is checked in `VERSION`, `CMakeLists.txt`
+  and `miniupnpc.h`, and the library is checked for the functions
+  `switch_nat.c` calls. Headers go to `include\miniupnpc\`, where
+  distributions install them. FreeSWITCH needs more than the props to switch:
+  `switch_nat.c` is written against the 1.3 API, and 2.x gave `upnpDiscover`
+  seven arguments, `UPNP_AddPortMapping` a lease duration, and moved
+  `IGDdatas.servicetype` to `IGDdatas.first.servicetype`.
 - **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which

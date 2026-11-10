@@ -1,0 +1,20 @@
+minixml: parseelt: check the end of the buffer before looking for a closing tag
+
+After element data, parseelt() reads the byte that follows '<' to see whether
+a closing tag starts. When that '<' is the last byte of the buffer, the read
+is one byte past the heap buffer.
+
+Upstream commit 42965d7e763b4f894986dd8feb19db7920ea0766, made after
+miniupnpc 2.3.3.
+
+--- a/src/minixml.c
++++ b/src/minixml.c
+@@ -197,7 +197,7 @@
+ 							if ((p->xml + 1) >= p->xmlend)
+ 								return;
+ 						}
+-						if(i>0 && p->datafunc && *(p->xml + 1) == '/')
++						if(i>0 && p->datafunc && (p->xml + 1) < p->xmlend && *(p->xml + 1) == '/')
+ 							p->datafunc(p->data, data, i);
+ 					}
+ 				}

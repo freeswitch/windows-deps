@@ -1,0 +1,22 @@
+minixml: parseatt: stop at the end of the buffer after '='
+
+parseatt() steps past the '=' of an attribute and reads the next character
+without checking for the end of the buffer, so a device description or SOAP
+reply from a spoofed gateway that ends in '=' reads one byte past the heap
+buffer.
+
+Upstream commit 3cfb4fb78d5ac04ed0dadc8dd842fc9e448916db, made after
+miniupnpc 2.3.3; only its code change, not the copyright header update.
+
+--- a/src/minixml.c
++++ b/src/minixml.c
+@@ -63,6 +63,9 @@
+ 				if(p->xml >= p->xmlend)
+ 					return -1;
+ 			}
++			/* p->xml points now to the character right after the '=' */
++			if(p->xml >= p->xmlend)
++				return -1;
+ 			while(IS_WHITE_SPACE(*p->xml))
+ 			{
+ 				p->xml++;
