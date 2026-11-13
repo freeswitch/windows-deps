@@ -160,6 +160,11 @@
       "version": "2.3.3",
       "source": "https://github.com/miniupnp/miniupnp/releases/download/miniupnpc_{version_}/miniupnpc-{version}.tar.gz",
       "deps": []
+    },
+    "libnatpmp": {
+      "version": "20230423",
+      "source": "https://deb.debian.org/debian/pool/main/libn/libnatpmp/libnatpmp_{version}.orig.tar.gz",
+      "deps": []
     }
   }
 }

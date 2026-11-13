@@ -62,14 +62,15 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "lua":     { "version": "5.3.6",  "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",                                  "deps": [] },
     "libnode": { "version": "24.22.3", "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",                     "deps": [] },
     "ffmpeg":  { "version": "8.1.3",  "source": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.gz",                          "deps": [] },
-    "miniupnpc": { "version": "2.3.3", "source": "https://github.com/miniupnp/miniupnp/releases/download/miniupnpc_{version_}/miniupnpc-{version}.tar.gz", "deps": [] }
+    "miniupnpc": { "version": "2.3.3", "source": "https://github.com/miniupnp/miniupnp/releases/download/miniupnpc_{version_}/miniupnpc-{version}.tar.gz", "deps": [] },
+    "libnatpmp": { "version": "20230423", "source": "https://deb.debian.org/debian/pool/main/libn/libnatpmp/libnatpmp_{version}.orig.tar.gz", "deps": [] }
   }
 }
 ```
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
 `rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
-`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns`, `speex`, `libjpeg`, `freetype`, `libnode`, `ffmpeg`, `miniupnpc` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
+`openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns`, `speex`, `libjpeg`, `freetype`, `libnode`, `ffmpeg`, `miniupnpc`, `libnatpmp` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
 the repository name `signalwire-c`). In `source`, `{version}` expands to the
@@ -709,6 +710,20 @@ Notes carried over from the individual builders:
   `switch_nat.c` is written against the 1.3 API, and 2.x gave `upnpDiscover`
   seven arguments, `UPNP_AddPortMapping` a lease duration, and moved
   `IGDdatas.servicetype` to `IGDdatas.first.servicetype`.
+- **libnatpmp is 20230423**, the latest release and the one Debian ships, and
+  replaces the 2009 snapshot FreeSwitchCore compiles from `libs\libnatpmp`.
+  The source is Debian's `orig.tar.gz`, upstream's release tarball byte for
+  byte; upstream's GitHub repository has no tags or releases. It is built with
+  upstream's CMake as the static `natpmp.lib` (`/MD`), library target only, with
+  `CMAKE_POLICY_VERSION_MINIMUM=3.5` because that `CMakeLists.txt` asks for
+  CMake 2.8.12. It has no install rules, so the package takes `natpmp.h` and
+  `natpmp_declspec.h` from the source tree and puts them in `include\`, where
+  distributions install them. Consumers define `NATPMP_STATICLIB` and link
+  `ws2_32.lib` and `iphlpapi.lib`, which `libnatpmp.props` does. The release
+  keeps its version only in the tarball's directory name, which is checked,
+  and the library is checked for the functions `switch_nat.c` calls.
+  FreeSWITCH needs more than the props to switch: `initnatpmp` has taken two
+  more arguments (`forcegw`, `forcedgw`) since the 2009 snapshot.
 - **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which
