@@ -60,7 +60,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "pcre":    { "version": "10.48", "source": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-{version}/pcre2-{version}.tar.gz", "deps": [] },
     "flite":   { "version": "2.2",    "source": "https://github.com/festvox/flite/archive/refs/tags/v{version}.tar.gz",           "deps": [] },
     "lua":     { "version": "5.3.6",  "source": "https://www.lua.org/ftp/lua-{version}.tar.gz",                                  "deps": [] },
-    "libnode": { "version": "24.22.1", "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",                     "deps": [] },
+    "libnode": { "version": "24.22.3", "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",                     "deps": [] },
     "ffmpeg":  { "version": "8.1.3",  "source": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.gz",                          "deps": [] },
     "miniupnpc": { "version": "2.3.3", "source": "https://github.com/miniupnp/miniupnp/releases/download/miniupnpc_{version_}/miniupnpc-{version}.tar.gz", "deps": [] }
   }
@@ -646,7 +646,7 @@ Notes carried over from the individual builders:
   OpenSSL, ICU, libuv, zlib, …). x64 only — Node has no 32 bit Windows build —
   with `libnode.pdb` in the Debug package. A Release + Debug build takes hours,
   so the job runs with a 360 minute timeout. The version has to be one
-  `mod_v8` compiles against: 24.22.1 (V8 13.6) needs the port off
+  `mod_v8` compiles against: 24.22.3 (V8 13.6) needs the port off
   `FunctionCallbackInfo::Holder()` and `SetAccessor()`, which V8 removed after
   11.3 (Node 20). `libnode.props` now copies `libnode.dll` whenever it
   differs rather than only when it is missing, so a version bump replaces the

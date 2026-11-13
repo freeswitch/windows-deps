@@ -147,7 +147,7 @@
       "deps": []
     },
     "libnode": {
-      "version": "24.22.1",
+      "version": "24.22.3",
       "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",
       "deps": []
     },
