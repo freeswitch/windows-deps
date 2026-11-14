@@ -52,8 +52,8 @@
 
   <ItemDefinitionGroup>
     <ClCompile>
-      <!-- FreeSWITCH includes <srtp.h>. -->
-      <AdditionalIncludeDirectories>$(libsrtpLibDir)\include\srtp2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- FreeSWITCH includes <srtp2/srtp.h>. -->
+      <AdditionalIncludeDirectories>$(libsrtpLibDir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(libsrtpLibDir)\binaries\$(Platform)\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>

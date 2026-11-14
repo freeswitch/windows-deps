@@ -732,8 +732,8 @@ Notes carried over from the individual builders:
   the in-tree build does, and without the test applications. The package
   holds what upstream's install rules install: the library, and `srtp.h`,
   `auth.h`, `cipher.h` and `crypto_types.h` in `include\srtp2\`, where
-  distributions install them. `libsrtp.props` puts `include\srtp2` on the
-  include path, because FreeSWITCH includes `<srtp.h>`, and links `srtp2.lib`,
+  distributions install them. `libsrtp.props` puts `include` on the include
+  path, because FreeSWITCH includes `<srtp2/srtp.h>`, and links `srtp2.lib`,
   `ws2_32.lib` and the OpenSSL package. The version is checked in
   `CMakeLists.txt`, and the library is checked for the functions
   `switch_rtp.c` calls and for the OpenSSL AES-GCM cipher. FreeSWITCH needs
