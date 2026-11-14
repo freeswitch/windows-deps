@@ -63,13 +63,14 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "libnode": { "version": "24.22.3", "source": "https://nodejs.org/dist/v{version}/node-v{version}.tar.gz",                     "deps": [] },
     "ffmpeg":  { "version": "8.1.3",  "source": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.gz",                          "deps": [] },
     "miniupnpc": { "version": "2.3.3", "source": "https://github.com/miniupnp/miniupnp/releases/download/miniupnpc_{version_}/miniupnpc-{version}.tar.gz", "deps": [] },
-    "libnatpmp": { "version": "20230423", "source": "https://deb.debian.org/debian/pool/main/libn/libnatpmp/libnatpmp_{version}.orig.tar.gz", "deps": [] }
+    "libnatpmp": { "version": "20230423", "source": "https://deb.debian.org/debian/pool/main/libn/libnatpmp/libnatpmp_{version}.orig.tar.gz", "deps": [] },
+    "libsrtp": { "version": "2.8.1", "source": "https://github.com/cisco/libsrtp/archive/refs/tags/v{version}.tar.gz", "deps": ["openssl"] }
   }
 }
 ```
 
 `deps` is the dependency graph: `openssl` and `libpng` need `zlib`, `libks`,
-`rabbitmq-c` and `libpq` need `openssl`, `signalwire-client-c` needs `libks` and
+`rabbitmq-c`, `libpq` and `libsrtp` need `openssl`, `signalwire-client-c` needs `libks` and
 `openssl`, `curl` needs `zlib` and `openssl`, `libpcap`, `lua`, `flite`, `pcre`, `opencv`, `broadvoice`, `g722_1`, `ilbc`, `libsilk`, `libtiff`, `lame`, `libogg`, `pthreads`, `mpg123`, `sqlite`, `ldns`, `speex`, `libjpeg`, `freetype`, `libnode`, `ffmpeg`, `miniupnpc`, `libnatpmp` and `mariadb-connector-c` stand alone, `libshout` needs `libogg` and `pthreads`, so each is built
 after its dependencies and against their packages. The graph must be acyclic; `scripts/plan.ps1` validates it. Node
 names are the package names FreeSWITCH already uses (`signalwire-client-c`, not
@@ -724,6 +725,20 @@ Notes carried over from the individual builders:
   and the library is checked for the functions `switch_nat.c` calls.
   FreeSWITCH needs more than the props to switch: `initnatpmp` has taken two
   more arguments (`forcegw`, `forcedgw`) since the 2009 snapshot.
+- **libsrtp is 2.8.1**, the latest release, and replaces the 2.6.0 that
+  FreeSWITCH compiles from `libs\srtp` with `libsrtp.2017.vcxproj`. It is
+  built from the GitHub tag archive with upstream's CMake as the static
+  `srtp2.lib` (`/MD`) with `ENABLE_OPENSSL`, which also enables AES-GCM, as
+  the in-tree build does, and without the test applications. The package
+  holds what upstream's install rules install: the library, and `srtp.h`,
+  `auth.h`, `cipher.h` and `crypto_types.h` in `include\srtp2\`, where
+  distributions install them. `libsrtp.props` puts `include\srtp2` on the
+  include path, because FreeSWITCH includes `<srtp.h>`, and links `srtp2.lib`,
+  `ws2_32.lib` and the OpenSSL package. The version is checked in
+  `CMakeLists.txt`, and the library is checked for the functions
+  `switch_rtp.c` calls and for the OpenSSL AES-GCM cipher. FreeSWITCH needs
+  more than the props to switch: it must use only the public API, not
+  `srtp_priv.h`, which is not installed.
 - **OpenSSL packages are `/MT`**, zlib packages `/MD`, as their predecessors
   were.
 - **libpng replaces FreeSWITCH's in-tree build** (`libs\win32\libpng`, which
