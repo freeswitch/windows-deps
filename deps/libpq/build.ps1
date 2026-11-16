@@ -127,6 +127,15 @@ foreach ($plat in $s.Platforms) {
         if ($mb -notmatch "(?m)^\s*version:\s*'([0-9][^']*)'") { throw "No project version found in PostgreSQL's meson.build." }
         if ($Matches[1] -ne $s.Version) { throw "PostgreSQL source declares version $($Matches[1]) but deps.json says $($s.Version)." }
 
+        # meson.build first asks Meson for an 'openssl' dependency (pkg-config, CMake),
+        # which finds any OpenSSL installed on the build machine: the GitHub runner has
+        # one in C:\Program Files\OpenSSL whose libcrypto.lib/libssl.lib import the
+        # OpenSSL DLLs. Without that lookup meson.build falls back to find_library()
+        # in extra_lib_dirs, which finds the static libraries of the openssl package.
+        $sslLookup = "ssl = dependency('openssl', required: false)"
+        if (-not $mb.Contains($sslLookup)) { throw "PostgreSQL's meson.build no longer contains `"$sslLookup`"." }
+        [System.IO.File]::WriteAllText((Join-Path $srcDir 'meson.build'), $mb.Replace($sslLookup, 'ssl = not_found_dep'))
+
         $sslRoot = Get-OpenSSLRootForCMake -Platform $plat -Config $config -CacheDir $depCache
         $sslInc  = ConvertTo-ForwardSlashes (Join-Path $sslRoot 'include')
         $sslLib  = ConvertTo-ForwardSlashes (Join-Path $sslRoot 'lib')
@@ -187,7 +196,7 @@ dumpbin /nologo /dependents /exports "$dllPath" > "$dumpFile" || exit /b 1
         # OpenSSL must be *inside* the DLL: a libcrypto/libssl import would mean
         # the package needs OpenSSL DLLs next to it at run time, which the old
         # libpq packages never did.
-        if ($dump -match '(?im)^\s*(libcrypto|libssl)[-0-9_]*\.dll') { throw "libpq.dll imports an OpenSSL DLL; it must link libcrypto/libssl statically (see $dumpFile)." }
+        if ($dump -match '(?im)^\s*(libcrypto|libssl)\S*\.dll') { throw "libpq.dll imports an OpenSSL DLL; it must link libcrypto/libssl statically (see $dumpFile)." }
         foreach ($imp in 'WS2_32.dll', 'SECUR32.dll', 'WLDAP32.dll') {
             if ($dump -notmatch "(?i)\b$([regex]::Escape($imp))\b") { throw "libpq.dll does not import $imp -- SSL/LDAP support did not get enabled (see $dumpFile)." }
         }

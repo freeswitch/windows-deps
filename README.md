@@ -344,7 +344,12 @@ Notes carried over from the individual builders:
   `switch_pgsql` need nothing beyond `libpq-fe.h`. Dynamic CRT (`/MD`, `/MDd`),
   like FreeSWITCH. `CC=cl` is set for the build because Strawberry Perl puts an
   ancient `ccache` on the machine PATH, which Meson would otherwise adopt as a
-  compiler launcher.
+  compiler launcher. For the same kind of reason the build replaces
+  `meson.build`'s `dependency('openssl')` lookup with `not_found_dep`: it finds
+  any OpenSSL installed on the machine (the GitHub runner has one in
+  `C:\Program Files\OpenSSL`, built as DLLs), while PostgreSQL's fallback
+  searches `extra_lib_dirs`, where the package's static libraries are. The build
+  fails if `libpq.dll` imports an OpenSSL DLL.
 - **mariadb-connector-c uses Schannel, not OpenSSL**, which is upstream's Windows
   default and what the previous packages did (hence the `Secur32.lib` in
   `mod_mariadb`'s link line), so the node depends on nothing else in the graph.
