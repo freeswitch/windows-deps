@@ -50,7 +50,7 @@ docker/Dockerfile               one Windows-container toolchain image for all de
     "pthreads": { "version": "2.9.1", "source": "https://github.com/freeswitch/windows-deps/releases/download/pthreads-w32-2-9-1-release/pthreads-w32-2-9-1.tar.gz", "deps": [] },
     "libshout": { "version": "2.4.6", "source": "https://downloads.xiph.org/releases/libshout/libshout-{version}.tar.gz",   "deps": ["libogg", "pthreads"] },
     "mpg123":  { "version": "1.33.7", "source": "https://www.mpg123.de/download/mpg123-{version}.tar.bz2",                "deps": [] },
-    "sqlite":  { "version": "3.53.4", "source": "https://github.com/sqlite/sqlite/archive/refs/tags/version-{version}.tar.gz", "deps": [] },
+    "sqlite":  { "version": "3.54.1", "source": "https://github.com/sqlite/sqlite/archive/refs/tags/version-{version}.tar.gz", "deps": [] },
     "ldns":    { "version": "1.9.2", "source": "https://github.com/NLnetLabs/ldns/archive/refs/tags/{version}.tar.gz", "deps": [] },
     "speex":   { "version": "1.2.1", "source": "https://github.com/xiph/speex/archive/refs/tags/Speex-{version}.tar.gz", "deps": [] },
     "libjpeg": { "version": "10", "source": "https://www.ijg.org/files/jpegsrc.v{version}.tar.gz", "deps": [] },
